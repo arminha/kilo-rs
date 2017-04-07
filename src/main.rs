@@ -7,7 +7,7 @@ use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
-use std::io::{self, Read, ErrorKind};
+use std::io::{self, Stdin, Read, ErrorKind};
 
 macro_rules! ctrl_key {
     ($k:expr) => ($k & 0x1f);
@@ -38,9 +38,26 @@ fn enable_raw_mode() -> io::Result<TermReset> {
     Ok(mode)
 }
 
-fn iscntrl(c: u8) -> bool {
-    unsafe {
-        libc::iscntrl(c as i32) != 0
+fn editor_read_key(stdin: &mut Stdin) -> u8 {
+    let mut buf = [0; 1];
+    loop {
+        let n = stdin.read(&mut buf)
+                 .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
+                 .expect("read");
+        if n == 1 {
+            return buf[0];
+        }
+    }
+}
+
+fn editor_process_keypress(stdin: &mut Stdin) -> bool {
+    let c = editor_read_key(stdin);
+
+    match c {
+        k if k == ctrl_key!(b'q') => {
+            false
+        },
+        _ => true
     }
 }
 
@@ -48,23 +65,6 @@ fn main() {
     let _reset = enable_raw_mode().unwrap();
 
     let mut stdin = io::stdin();
-    let mut buf = [0; 1];
-
-    loop {
-        buf[0] = 0;
-        let n = stdin.read(&mut buf)
-                     .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
-                     .expect("read");
-        if n > 0 {
-            let c = buf[0];
-            if c == ctrl_key!(b'q') {
-                break;
-            }
-            if iscntrl(c) {
-                print!("{}\r\n", &c);
-            } else {
-                print!("{} ({})\r\n", &c, c as char);
-            }
-        }
+    while editor_process_keypress(&mut stdin) {
     }
 }
