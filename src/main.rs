@@ -2,12 +2,12 @@ extern crate libc;
 extern crate termios;
 
 use libc::STDIN_FILENO;
-use termios::{Termios, tcsetattr, TCSAFLUSH};
+use termios::{Termios, tcsetattr, TCSAFLUSH, VMIN, VTIME};
 use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
-use std::io::{self, Read};
+use std::io::{self, Read, ErrorKind};
 
 struct TermReset {
     orig_term: Termios
@@ -27,6 +27,8 @@ fn enable_raw_mode() -> io::Result<TermReset> {
     term.c_oflag &= !OPOST;
     term.c_cflag |= CS8;
     term.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
+    term.c_cc[VMIN] = 0;
+    term.c_cc[VTIME] = 1;
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &term)?;
     Ok(mode)
@@ -44,15 +46,21 @@ fn main() {
     let mut stdin = io::stdin();
     let mut buf = [0; 1];
 
-    while let Ok(1) = stdin.read(&mut buf) {
-        let c = buf[0];
-        if c == b'q' {
-            break;
-        }
-        if iscntrl(c) {
-            print!("{}\r\n", &c);
-        } else {
-            print!("{} ({})\r\n", &c, c as char);
+    loop {
+        buf[0] = 0;
+        let n = stdin.read(&mut buf)
+                     .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
+                     .expect("read");
+        if n > 0 {
+            let c = buf[0];
+            if c == b'q' {
+                break;
+            }
+            if iscntrl(c) {
+                print!("{}\r\n", &c);
+            } else {
+                print!("{} ({})\r\n", &c, c as char);
+            }
         }
     }
 }
