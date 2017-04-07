@@ -9,6 +9,10 @@ use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
 use std::io::{self, Read, ErrorKind};
 
+macro_rules! ctrl_key {
+    ($k:expr) => ($k & 0x1f);
+}
+
 struct TermReset {
     orig_term: Termios
 }
@@ -53,7 +57,7 @@ fn main() {
                      .expect("read");
         if n > 0 {
             let c = buf[0];
-            if c == b'q' {
+            if c == ctrl_key!(b'q') {
                 break;
             }
             if iscntrl(c) {
