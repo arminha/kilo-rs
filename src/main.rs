@@ -1,13 +1,13 @@
 extern crate libc;
 extern crate termios;
 
-use libc::STDIN_FILENO;
+use libc::{STDIN_FILENO, STDOUT_FILENO, TIOCGWINSZ, winsize};
 use termios::{Termios, tcsetattr, TCSAFLUSH, VMIN, VTIME};
 use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
-use std::io::{self, Stdin, Stdout, Read, ErrorKind, Write};
+use std::io::{self, Stdin, Stdout, Read, Error, ErrorKind, Write};
 
 macro_rules! ctrl_key {
     ($k:expr) => ($k & 0x1f);
@@ -18,7 +18,9 @@ struct TermReset {
 }
 
 struct EditorConfig {
-    _term: TermReset
+    _term: TermReset,
+    screenrows: u16,
+    screencols: u16,
 }
 
 impl Drop for TermReset {
@@ -30,7 +32,8 @@ impl Drop for TermReset {
 impl EditorConfig {
     fn new() -> EditorConfig {
         let term = enable_raw_mode().unwrap();
-        EditorConfig { _term: term }
+        let (rows, cols) = get_window_size().unwrap();
+        EditorConfig { _term: term, screenrows: rows, screencols: cols }
     }
 }
 
@@ -61,23 +64,34 @@ fn editor_read_key(stdin: &mut Stdin) -> u8 {
     }
 }
 
+fn get_window_size() -> io::Result<(u16, u16)> {
+    let ws = winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
+    unsafe {
+        if libc::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0 {
+            return Err(Error::new(ErrorKind::Other, "get_window_size: ioctl failed"))
+        }
+    }
+    Ok((ws.ws_row, ws.ws_col))
+}
+
 fn clear_screen(stdout: &mut Stdout) -> io::Result<()> {
     stdout.write(b"\x1b[2J")?;
     stdout.write(b"\x1b[H")?;
     stdout.flush()
 }
 
-fn editor_draw_rows(stdout: &mut Stdout) -> io::Result<()> {
-  for _ in 0..24 {
-    stdout.write(b"~\r\n")?;
-  }
-  Ok(())
+fn editor_draw_rows(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
+    for _ in 0..(e.screenrows - 1) {
+        stdout.write(b"~\r\n")?;
+    }
+    stdout.write(b"~")?;
+    Ok(())
 }
 
-fn editor_refresh_screen(stdout: &mut Stdout) -> io::Result<()> {
+fn editor_refresh_screen(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
     clear_screen(stdout)?;
 
-    editor_draw_rows(stdout)?;
+    editor_draw_rows(stdout, e)?;
 
     stdout.write(b"\x1b[H")?;
     stdout.flush()
@@ -95,13 +109,13 @@ fn editor_process_keypress(stdin: &mut Stdin) -> bool {
 }
 
 fn main() {
-    let _e = EditorConfig::new();
+    let e = EditorConfig::new();
 
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
-    editor_refresh_screen(&mut stdout).unwrap();
+    editor_refresh_screen(&mut stdout, &e).unwrap();
     while editor_process_keypress(&mut stdin) {
-        editor_refresh_screen(&mut stdout).unwrap();
+        editor_refresh_screen(&mut stdout, &e).unwrap();
     }
     clear_screen(&mut stdout).unwrap();
 }
