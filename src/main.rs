@@ -110,11 +110,13 @@ fn editor_draw_rows(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
 }
 
 fn editor_refresh_screen(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
+    stdout.write(b"\x1b[?25l")?;
     clear_screen(stdout)?;
 
     editor_draw_rows(stdout, e)?;
 
     stdout.write(b"\x1b[H")?;
+    stdout.write(b"\x1b[?25h")?;
     stdout.flush()
 }
 
