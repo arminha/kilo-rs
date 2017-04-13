@@ -23,17 +23,15 @@ struct EditorConfig {
     screencols: u16,
 }
 
+struct Editor {
+    config: EditorConfig,
+    stdin: Stdin,
+    stdout: Stdout,
+}
+
 impl Drop for TermReset {
     fn drop(&mut self) {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.orig_term).unwrap()
-    }
-}
-
-impl EditorConfig {
-    fn new() -> EditorConfig {
-        let term = enable_raw_mode().unwrap();
-        let (rows, cols) = get_window_size().unwrap();
-        EditorConfig { _term: term, screenrows: rows, screencols: cols }
     }
 }
 
@@ -50,6 +48,29 @@ fn enable_raw_mode() -> io::Result<TermReset> {
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &term)?;
     Ok(mode)
+}
+
+impl EditorConfig {
+    fn new() -> EditorConfig {
+        let term = enable_raw_mode().unwrap();
+        let (rows, cols) = get_window_size().unwrap();
+        EditorConfig { _term: term, screenrows: rows, screencols: cols }
+    }
+}
+
+impl Editor {
+    fn new(config: EditorConfig) -> Editor {
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        Editor { config: config, stdin: stdin, stdout: stdout }
+    }
+}
+
+impl Drop for Editor {
+    fn drop(&mut self) {
+        clear_screen(&mut self.stdout).unwrap();
+        self.stdout.flush().unwrap();
+    }
 }
 
 fn editor_read_key(stdin: &mut Stdin) -> u8 {
@@ -77,7 +98,7 @@ fn get_window_size() -> io::Result<(u16, u16)> {
 fn clear_screen(stdout: &mut Stdout) -> io::Result<()> {
     stdout.write(b"\x1b[2J")?;
     stdout.write(b"\x1b[H")?;
-    stdout.flush()
+    Ok(())
 }
 
 fn editor_draw_rows(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
@@ -109,13 +130,10 @@ fn editor_process_keypress(stdin: &mut Stdin) -> bool {
 }
 
 fn main() {
-    let e = EditorConfig::new();
+    let mut editor = Editor::new(EditorConfig::new());
 
-    let mut stdin = io::stdin();
-    let mut stdout = io::stdout();
-    editor_refresh_screen(&mut stdout, &e).unwrap();
-    while editor_process_keypress(&mut stdin) {
-        editor_refresh_screen(&mut stdout, &e).unwrap();
+    editor_refresh_screen(&mut editor.stdout, &editor.config).unwrap();
+    while editor_process_keypress(&mut editor.stdin) {
+        editor_refresh_screen(&mut editor.stdout, &editor.config).unwrap();
     }
-    clear_screen(&mut stdout).unwrap();
 }
