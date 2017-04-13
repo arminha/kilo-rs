@@ -56,8 +56,20 @@ fn clear_screen(stdout: &mut Stdout) -> io::Result<()> {
     stdout.flush()
 }
 
+fn editor_draw_rows(stdout: &mut Stdout) -> io::Result<()> {
+  for _ in 0..24 {
+    stdout.write(b"~\r\n")?;
+  }
+  Ok(())
+}
+
 fn editor_refresh_screen(stdout: &mut Stdout) -> io::Result<()> {
-    clear_screen(stdout)
+    clear_screen(stdout)?;
+
+    editor_draw_rows(stdout)?;
+
+    stdout.write(b"\x1b[H")?;
+    stdout.flush()
 }
 
 fn editor_process_keypress(stdin: &mut Stdin) -> bool {
