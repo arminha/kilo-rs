@@ -7,7 +7,7 @@ use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
-use std::io::{self, Stdin, Read, ErrorKind};
+use std::io::{self, Stdin, Stdout, Read, ErrorKind, Write};
 
 macro_rules! ctrl_key {
     ($k:expr) => ($k & 0x1f);
@@ -50,6 +50,16 @@ fn editor_read_key(stdin: &mut Stdin) -> u8 {
     }
 }
 
+fn clear_screen(stdout: &mut Stdout) -> io::Result<()> {
+    stdout.write(b"\x1b[2J")?;
+    stdout.write(b"\x1b[H")?;
+    stdout.flush()
+}
+
+fn editor_refresh_screen(stdout: &mut Stdout) -> io::Result<()> {
+    clear_screen(stdout)
+}
+
 fn editor_process_keypress(stdin: &mut Stdin) -> bool {
     let c = editor_read_key(stdin);
 
@@ -65,6 +75,10 @@ fn main() {
     let _reset = enable_raw_mode().unwrap();
 
     let mut stdin = io::stdin();
+    let mut stdout = io::stdout();
+    editor_refresh_screen(&mut stdout).unwrap();
     while editor_process_keypress(&mut stdin) {
+        editor_refresh_screen(&mut stdout).unwrap();
     }
+    clear_screen(&mut stdout).unwrap();
 }
