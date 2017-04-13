@@ -17,9 +17,20 @@ struct TermReset {
     orig_term: Termios
 }
 
+struct EditorConfig {
+    _term: TermReset
+}
+
 impl Drop for TermReset {
     fn drop(&mut self) {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.orig_term).unwrap()
+    }
+}
+
+impl EditorConfig {
+    fn new() -> EditorConfig {
+        let term = enable_raw_mode().unwrap();
+        EditorConfig { _term: term }
     }
 }
 
@@ -84,7 +95,7 @@ fn editor_process_keypress(stdin: &mut Stdin) -> bool {
 }
 
 fn main() {
-    let _reset = enable_raw_mode().unwrap();
+    let _e = EditorConfig::new();
 
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
