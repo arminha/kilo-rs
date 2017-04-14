@@ -165,16 +165,24 @@ impl Editor {
     fn move_cursor(&mut self, c: u32) {
         match c {
             ARROW_UP => {
-                self.cy -= 1;
+                if self.cy > 0 {
+                    self.cy -= 1;
+                }
             },
             ARROW_DOWN => {
-                self.cy += 1;
+                if self.cy < self.screenrows - 1 {
+                    self.cy += 1;
+                }
             },
             ARROW_LEFT => {
-                self.cx -= 1;
+                if self.cx > 0 {
+                    self.cx -= 1;
+                }
             },
             ARROW_RIGHT => {
-                self.cx += 1;
+                if self.cx < self.screencols - 1 {
+                    self.cx += 1;
+                }
             },
             _ => {},
         }
