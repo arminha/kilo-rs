@@ -18,6 +18,7 @@ enum Key {
     ArrowRight,
     ArrowUp,
     ArrowDown,
+    DeleteKey,
     HomeKey,
     EndKey,
     PageUp,
@@ -87,6 +88,7 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                             if last[0] == b'~' {
                                 return match seq[1] {
                                     b'1' => Key::HomeKey,
+                                    b'3' => Key::DeleteKey,
                                     b'4' => Key::EndKey,
                                     b'5' => Key::PageUp,
                                     b'6' => Key::PageDown,
