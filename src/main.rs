@@ -21,6 +21,8 @@ struct RawMode {
 
 struct Editor {
     _mode: RawMode,
+    cx: u16,
+    cy: u16,
     screenrows: u16,
     screencols: u16,
     stdin: Stdin,
@@ -78,7 +80,15 @@ impl Editor {
         let (rows, cols) = get_window_size()?;
         let stdin = io::stdin();
         let stdout = io::stdout();
-        Ok(Editor { _mode: mode, screenrows: rows, screencols: cols, stdin: stdin, stdout: stdout })
+        Ok(Editor {
+            _mode: mode,
+            cx: 0,
+            cy: 0,
+            screenrows: rows,
+            screencols: cols,
+            stdin: stdin,
+            stdout: stdout
+        })
     }
 
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -120,9 +130,29 @@ impl Editor {
 
         self.draw_rows()?;
 
-        self.write(b"\x1b[H")?;
+        let move_cursor = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1).into_bytes();
+        self.write(&move_cursor)?;
+
         self.write(b"\x1b[?25h")?;
         self.flush()
+    }
+
+    fn move_cursor(&mut self, c: u8) {
+        match c {
+            b'w' => {
+                self.cy -= 1;
+            },
+            b's' => {
+                self.cy += 1;
+            },
+            b'a' => {
+                self.cx -= 1;
+            },
+            b'd' => {
+                self.cx += 1;
+            },
+            _ => {},
+        }
     }
 
     fn process_keypress(&mut self) -> bool {
@@ -131,6 +161,10 @@ impl Editor {
         match c {
             k if k == ctrl_key!(b'q') => {
                 false
+            },
+            b'w' | b's' | b'a' |  b'd' => {
+                self.move_cursor(c);
+                true
             },
             _ => true
         }
