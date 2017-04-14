@@ -15,6 +15,8 @@ const ARROW_LEFT: u32 = 1000;
 const ARROW_RIGHT: u32 = 1001;
 const ARROW_UP: u32 = 1002;
 const ARROW_DOWN: u32 = 1003;
+const PAGE_UP: u32 = 1004;
+const PAGE_DOWN: u32 = 1005;
 
 macro_rules! ctrl_key {
     ($k:expr) => (($k & 0x1f) as u32);
@@ -72,12 +74,27 @@ fn editor_read_key(stdin: &mut Stdin) -> u32 {
                 let mut seq = [0; 2];
                 let n = read_non_blocking(stdin, &mut seq);
                 if n == 2 && seq[0] == b'[' {
-                    return match seq[1] {
-                        b'A' => ARROW_UP,
-                        b'B' => ARROW_DOWN,
-                        b'C' => ARROW_RIGHT,
-                        b'D' => ARROW_LEFT,
-                        _ => b'\x1b' as u32,
+                    if seq[1] >= b'0' && seq[1] <= b'9' {
+                        let mut last = [0; 1];
+                        let n = read_non_blocking(stdin, &mut last);
+                        if n == 0 {
+                            return b'\x1b' as u32;
+                        }
+                        if last[0] == b'~' {
+                            if seq[1] == b'5' {
+                                return PAGE_UP;
+                            } else if seq[1] == b'6' {
+                                return PAGE_DOWN;
+                            }
+                        }
+                    } else {
+                        return match seq[1] {
+                            b'A' => ARROW_UP,
+                            b'B' => ARROW_DOWN,
+                            b'C' => ARROW_RIGHT,
+                            b'D' => ARROW_LEFT,
+                            _ => b'\x1b' as u32,
+                        }
                     }
                 } else {
                     return b'\x1b' as u32;
@@ -184,7 +201,7 @@ impl Editor {
                     self.cx += 1;
                 }
             },
-            _ => {},
+            _ => (),
         }
     }
 
@@ -193,14 +210,19 @@ impl Editor {
 
         match c {
             k if k == ctrl_key!(b'q') => {
-                false
+                return false
+            },
+            PAGE_UP | PAGE_DOWN => {
+                for _ in 0..(self.screenrows) {
+                    self.move_cursor(if c == PAGE_UP { ARROW_UP } else { ARROW_DOWN });
+                }
             },
             ARROW_UP | ARROW_DOWN | ARROW_LEFT | ARROW_RIGHT => {
                 self.move_cursor(c);
-                true
             },
-            _ => true
-        }
+            _ => ()
+        };
+        true
     }
 }
 
