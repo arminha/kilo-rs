@@ -11,8 +11,13 @@ use std::io::{self, Stdin, Stdout, Read, Error, ErrorKind, Write};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+const ARROW_LEFT: u32 = 1000;
+const ARROW_RIGHT: u32 = 1001;
+const ARROW_UP: u32 = 1002;
+const ARROW_DOWN: u32 = 1003;
+
 macro_rules! ctrl_key {
-    ($k:expr) => ($k & 0x1f);
+    ($k:expr) => (($k & 0x1f) as u32);
 }
 
 struct RawMode {
@@ -52,14 +57,34 @@ impl Drop for RawMode {
     }
 }
 
-fn editor_read_key(stdin: &mut Stdin) -> u8 {
+fn read_non_blocking<R : Read>(r : &mut R, buf: &mut [u8]) -> usize {
+    r.read(buf)
+     .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
+     .expect("read_non_blocking")
+}
+
+fn editor_read_key(stdin: &mut Stdin) -> u32 {
     let mut buf = [0; 1];
     loop {
-        let n = stdin.read(&mut buf)
-                 .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
-                 .expect("read");
+        let n = read_non_blocking(stdin, &mut buf);
         if n == 1 {
-            return buf[0];
+            if buf[0] == b'\x1b' {
+                let mut seq = [0; 2];
+                let n = read_non_blocking(stdin, &mut seq);
+                if n == 2 && seq[0] == b'[' {
+                    return match seq[1] {
+                        b'A' => ARROW_UP,
+                        b'B' => ARROW_DOWN,
+                        b'C' => ARROW_RIGHT,
+                        b'D' => ARROW_LEFT,
+                        _ => b'\x1b' as u32,
+                    }
+                } else {
+                    return b'\x1b' as u32;
+                }
+            } else {
+                return buf[0] as u32;
+            }
         }
     }
 }
@@ -137,18 +162,18 @@ impl Editor {
         self.flush()
     }
 
-    fn move_cursor(&mut self, c: u8) {
+    fn move_cursor(&mut self, c: u32) {
         match c {
-            b'w' => {
+            ARROW_UP => {
                 self.cy -= 1;
             },
-            b's' => {
+            ARROW_DOWN => {
                 self.cy += 1;
             },
-            b'a' => {
+            ARROW_LEFT => {
                 self.cx -= 1;
             },
-            b'd' => {
+            ARROW_RIGHT => {
                 self.cx += 1;
             },
             _ => {},
@@ -162,7 +187,7 @@ impl Editor {
             k if k == ctrl_key!(b'q') => {
                 false
             },
-            b'w' | b's' | b'a' |  b'd' => {
+            ARROW_UP | ARROW_DOWN | ARROW_LEFT | ARROW_RIGHT => {
                 self.move_cursor(c);
                 true
             },
