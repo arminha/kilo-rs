@@ -9,6 +9,8 @@ use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
 use std::io::{self, Stdin, Stdout, Read, Error, ErrorKind, Write};
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 macro_rules! ctrl_key {
     ($k:expr) => ($k & 0x1f);
 }
@@ -98,7 +100,20 @@ fn get_window_size() -> io::Result<(u16, u16)> {
 
 fn editor_draw_rows(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
     for y in 0..(e.screenrows) {
-        stdout.write(b"~")?;
+        if y == e.screenrows / 3 {
+            let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
+            msg.truncate(e.screencols as usize);
+            let padding = (e.screencols - msg.len() as u16) / 2;
+            if padding > 0 {
+                stdout.write(b"~")?;
+                for _ in 1..padding {
+                    stdout.write(b" ")?;
+                }
+            }
+            stdout.write(msg.as_bytes())?;
+        } else {
+            stdout.write(b"~")?;
+        }
 
         stdout.write(b"\x1b[K")?;
         if y < e.screenrows - 1 {
