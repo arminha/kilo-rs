@@ -18,6 +18,8 @@ enum Key {
     ArrowRight,
     ArrowUp,
     ArrowDown,
+    HomeKey,
+    EndKey,
     PageUp,
     PageDown,
 }
@@ -81,14 +83,17 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                     if seq[1] >= b'0' && seq[1] <= b'9' {
                         let mut last = [0; 1];
                         let n = read_non_blocking(stdin, &mut last);
-                        if n == 0 {
-                            return Key::Character(b'\x1b');
-                        }
-                        if last[0] == b'~' {
-                            if seq[1] == b'5' {
-                                return Key::PageUp;
-                            } else if seq[1] == b'6' {
-                                return Key::PageDown;
+                        if n == 1 {
+                            if last[0] == b'~' {
+                                return match seq[1] {
+                                    b'1' => Key::HomeKey,
+                                    b'4' => Key::EndKey,
+                                    b'5' => Key::PageUp,
+                                    b'6' => Key::PageDown,
+                                    b'7' => Key::HomeKey,
+                                    b'8' => Key::EndKey,
+                                    _ => Key::Character(b'\x1b'),
+                                }
                             }
                         }
                     } else {
@@ -97,12 +102,19 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                             b'B' => Key::ArrowDown,
                             b'C' => Key::ArrowRight,
                             b'D' => Key::ArrowLeft,
+                            b'H' => Key::HomeKey,
+                            b'F' => Key::EndKey,
                             _ => Key::Character(b'\x1b'),
                         }
                     }
-                } else {
-                    return Key::Character(b'\x1b');
+                } else if n == 2 && seq[0] == b'O' {
+                    return match seq[1] {
+                        b'H' => Key::HomeKey,
+                        b'F' => Key::EndKey,
+                        _ => Key::Character(b'\x1b'),
+                    }
                 }
+                return Key::Character(b'\x1b');
             } else {
                 return Key::Character(buf[0]);
             }
@@ -215,6 +227,12 @@ impl Editor {
         match c {
             Key::Character(k) if k == ctrl_key!(b'q') => {
                 return false
+            },
+            Key::HomeKey => {
+                self.cx = 0;
+            },
+            Key::EndKey => {
+                self.cx = self.screencols - 1;
             },
             Key::PageUp | Key::PageDown => {
                 let key = if c == Key::PageUp { Key::ArrowUp } else { Key::ArrowDown };
