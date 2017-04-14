@@ -68,7 +68,8 @@ impl Editor {
 
 impl Drop for Editor {
     fn drop(&mut self) {
-        clear_screen(&mut self.stdout).unwrap();
+        self.stdout.write(b"\x1b[2J").unwrap();
+        self.stdout.write(b"\x1b[H").unwrap();
         self.stdout.flush().unwrap();
     }
 }
@@ -95,23 +96,21 @@ fn get_window_size() -> io::Result<(u16, u16)> {
     Ok((ws.ws_row, ws.ws_col))
 }
 
-fn clear_screen(stdout: &mut Stdout) -> io::Result<()> {
-    stdout.write(b"\x1b[2J")?;
-    stdout.write(b"\x1b[H")?;
-    Ok(())
-}
-
 fn editor_draw_rows(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
-    for _ in 0..(e.screenrows - 1) {
-        stdout.write(b"~\r\n")?;
+    for y in 0..(e.screenrows) {
+        stdout.write(b"~")?;
+
+        stdout.write(b"\x1b[K")?;
+        if y < e.screenrows - 1 {
+            stdout.write(b"\r\n")?;
+        }
     }
-    stdout.write(b"~")?;
     Ok(())
 }
 
 fn editor_refresh_screen(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
     stdout.write(b"\x1b[?25l")?;
-    clear_screen(stdout)?;
+    stdout.write(b"\x1b[H")?;
 
     editor_draw_rows(stdout, e)?;
 
