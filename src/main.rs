@@ -11,15 +11,19 @@ use std::io::{self, Stdin, Stdout, Read, Error, ErrorKind, Write};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-const ARROW_LEFT: u32 = 1000;
-const ARROW_RIGHT: u32 = 1001;
-const ARROW_UP: u32 = 1002;
-const ARROW_DOWN: u32 = 1003;
-const PAGE_UP: u32 = 1004;
-const PAGE_DOWN: u32 = 1005;
+#[derive(PartialEq, Clone, Copy)]
+enum Key {
+    Character(u8),
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    ArrowDown,
+    PageUp,
+    PageDown,
+}
 
 macro_rules! ctrl_key {
-    ($k:expr) => (($k & 0x1f) as u32);
+    ($k:expr) => ($k & 0x1f);
 }
 
 struct RawMode {
@@ -65,7 +69,7 @@ fn read_non_blocking<R : Read>(r : &mut R, buf: &mut [u8]) -> usize {
      .expect("read_non_blocking")
 }
 
-fn editor_read_key(stdin: &mut Stdin) -> u32 {
+fn editor_read_key(stdin: &mut Stdin) -> Key {
     let mut buf = [0; 1];
     loop {
         let n = read_non_blocking(stdin, &mut buf);
@@ -78,29 +82,29 @@ fn editor_read_key(stdin: &mut Stdin) -> u32 {
                         let mut last = [0; 1];
                         let n = read_non_blocking(stdin, &mut last);
                         if n == 0 {
-                            return b'\x1b' as u32;
+                            return Key::Character(b'\x1b');
                         }
                         if last[0] == b'~' {
                             if seq[1] == b'5' {
-                                return PAGE_UP;
+                                return Key::PageUp;
                             } else if seq[1] == b'6' {
-                                return PAGE_DOWN;
+                                return Key::PageDown;
                             }
                         }
                     } else {
                         return match seq[1] {
-                            b'A' => ARROW_UP,
-                            b'B' => ARROW_DOWN,
-                            b'C' => ARROW_RIGHT,
-                            b'D' => ARROW_LEFT,
-                            _ => b'\x1b' as u32,
+                            b'A' => Key::ArrowUp,
+                            b'B' => Key::ArrowDown,
+                            b'C' => Key::ArrowRight,
+                            b'D' => Key::ArrowLeft,
+                            _ => Key::Character(b'\x1b'),
                         }
                     }
                 } else {
-                    return b'\x1b' as u32;
+                    return Key::Character(b'\x1b');
                 }
             } else {
-                return buf[0] as u32;
+                return Key::Character(buf[0]);
             }
         }
     }
@@ -179,24 +183,24 @@ impl Editor {
         self.flush()
     }
 
-    fn move_cursor(&mut self, c: u32) {
-        match c {
-            ARROW_UP => {
+    fn move_cursor(&mut self, k: Key) {
+        match k {
+            Key::ArrowUp => {
                 if self.cy > 0 {
                     self.cy -= 1;
                 }
             },
-            ARROW_DOWN => {
+            Key::ArrowDown => {
                 if self.cy < self.screenrows - 1 {
                     self.cy += 1;
                 }
             },
-            ARROW_LEFT => {
+            Key::ArrowLeft => {
                 if self.cx > 0 {
                     self.cx -= 1;
                 }
             },
-            ARROW_RIGHT => {
+            Key::ArrowRight => {
                 if self.cx < self.screencols - 1 {
                     self.cx += 1;
                 }
@@ -209,15 +213,16 @@ impl Editor {
         let c = editor_read_key(&mut self.stdin);
 
         match c {
-            k if k == ctrl_key!(b'q') => {
+            Key::Character(k) if k == ctrl_key!(b'q') => {
                 return false
             },
-            PAGE_UP | PAGE_DOWN => {
+            Key::PageUp | Key::PageDown => {
+                let key = if c == Key::PageUp { Key::ArrowUp } else { Key::ArrowDown };
                 for _ in 0..(self.screenrows) {
-                    self.move_cursor(if c == PAGE_UP { ARROW_UP } else { ARROW_DOWN });
+                    self.move_cursor(key);
                 }
             },
-            ARROW_UP | ARROW_DOWN | ARROW_LEFT | ARROW_RIGHT => {
+            Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight => {
                 self.move_cursor(c);
             },
             _ => ()
