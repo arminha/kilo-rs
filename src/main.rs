@@ -15,64 +15,38 @@ macro_rules! ctrl_key {
     ($k:expr) => ($k & 0x1f);
 }
 
-struct TermReset {
+struct RawMode {
     orig_term: Termios
 }
 
-struct EditorConfig {
-    _term: TermReset,
+struct Editor {
+    _mode: RawMode,
     screenrows: u16,
     screencols: u16,
-}
-
-struct Editor {
-    config: EditorConfig,
     stdin: Stdin,
     stdout: Stdout,
 }
 
-impl Drop for TermReset {
+impl RawMode {
+    fn enable_raw_mode() -> io::Result<RawMode> {
+        let mut term = Termios::from_fd(STDIN_FILENO)?;
+        let mode = RawMode { orig_term: term.clone() };
+
+        term.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+        term.c_oflag &= !OPOST;
+        term.c_cflag |= CS8;
+        term.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
+        term.c_cc[VMIN] = 0;
+        term.c_cc[VTIME] = 1;
+
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &term)?;
+        Ok(mode)
+    }
+}
+
+impl Drop for RawMode {
     fn drop(&mut self) {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.orig_term).unwrap()
-    }
-}
-
-fn enable_raw_mode() -> io::Result<TermReset> {
-    let mut term = Termios::from_fd(STDIN_FILENO)?;
-    let mode = TermReset { orig_term: term.clone() };
-
-    term.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-    term.c_oflag &= !OPOST;
-    term.c_cflag |= CS8;
-    term.c_lflag &= !(ECHO | ICANON | IEXTEN | ISIG);
-    term.c_cc[VMIN] = 0;
-    term.c_cc[VTIME] = 1;
-
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &term)?;
-    Ok(mode)
-}
-
-impl EditorConfig {
-    fn new() -> EditorConfig {
-        let term = enable_raw_mode().unwrap();
-        let (rows, cols) = get_window_size().unwrap();
-        EditorConfig { _term: term, screenrows: rows, screencols: cols }
-    }
-}
-
-impl Editor {
-    fn new(config: EditorConfig) -> Editor {
-        let stdin = io::stdin();
-        let stdout = io::stdout();
-        Editor { config: config, stdin: stdin, stdout: stdout }
-    }
-}
-
-impl Drop for Editor {
-    fn drop(&mut self) {
-        self.stdout.write(b"\x1b[2J").unwrap();
-        self.stdout.write(b"\x1b[H").unwrap();
-        self.stdout.flush().unwrap();
     }
 }
 
@@ -98,58 +72,85 @@ fn get_window_size() -> io::Result<(u16, u16)> {
     Ok((ws.ws_row, ws.ws_col))
 }
 
-fn editor_draw_rows(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
-    for y in 0..(e.screenrows) {
-        if y == e.screenrows / 3 {
-            let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
-            msg.truncate(e.screencols as usize);
-            let padding = (e.screencols - msg.len() as u16) / 2;
-            if padding > 0 {
-                stdout.write(b"~")?;
-                for _ in 1..padding {
-                    stdout.write(b" ")?;
-                }
-            }
-            stdout.write(msg.as_bytes())?;
-        } else {
-            stdout.write(b"~")?;
-        }
+impl Editor {
+    fn new() -> io::Result<Editor> {
+        let mode = RawMode::enable_raw_mode()?;
+        let (rows, cols) = get_window_size()?;
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        Ok(Editor { _mode: mode, screenrows: rows, screencols: cols, stdin: stdin, stdout: stdout })
+    }
 
-        stdout.write(b"\x1b[K")?;
-        if y < e.screenrows - 1 {
-            stdout.write(b"\r\n")?;
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stdout.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stdout.flush()
+    }
+
+    fn draw_rows(&mut self) -> io::Result<()> {
+        for y in 0..(self.screenrows) {
+            if y == self.screenrows / 3 {
+                let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
+                msg.truncate(self.screencols as usize);
+                let padding = (self.screencols - msg.len() as u16) / 2;
+                if padding > 0 {
+                    self.write(b"~")?;
+                    for _ in 1..padding {
+                        self.write(b" ")?;
+                    }
+                }
+                self.write(msg.as_bytes())?;
+            } else {
+                self.write(b"~")?;
+            }
+
+            self.write(b"\x1b[K")?;
+            if y < self.screenrows - 1 {
+                self.write(b"\r\n")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn refresh_screen(&mut self) -> io::Result<()> {
+        self.write(b"\x1b[?25l")?;
+        self.write(b"\x1b[H")?;
+
+        self.draw_rows()?;
+
+        self.write(b"\x1b[H")?;
+        self.write(b"\x1b[?25h")?;
+        self.flush()
+    }
+
+    fn process_keypress(&mut self) -> bool {
+        let c = editor_read_key(&mut self.stdin);
+
+        match c {
+            k if k == ctrl_key!(b'q') => {
+                false
+            },
+            _ => true
         }
     }
-    Ok(())
 }
 
-fn editor_refresh_screen(stdout: &mut Stdout, e: &EditorConfig) -> io::Result<()> {
-    stdout.write(b"\x1b[?25l")?;
-    stdout.write(b"\x1b[H")?;
-
-    editor_draw_rows(stdout, e)?;
-
-    stdout.write(b"\x1b[H")?;
-    stdout.write(b"\x1b[?25h")?;
-    stdout.flush()
-}
-
-fn editor_process_keypress(stdin: &mut Stdin) -> bool {
-    let c = editor_read_key(stdin);
-
-    match c {
-        k if k == ctrl_key!(b'q') => {
-            false
-        },
-        _ => true
+impl Drop for Editor {
+    fn drop(&mut self) {
+        // clear screen
+        self.stdout.write(b"\x1b[2J").unwrap();
+        self.stdout.write(b"\x1b[H").unwrap();
+        self.stdout.flush().unwrap();
     }
 }
 
 fn main() {
-    let mut editor = Editor::new(EditorConfig::new());
+    let mut editor = Editor::new().unwrap();
 
-    editor_refresh_screen(&mut editor.stdout, &editor.config).unwrap();
-    while editor_process_keypress(&mut editor.stdin) {
-        editor_refresh_screen(&mut editor.stdout, &editor.config).unwrap();
+    editor.refresh_screen().unwrap();
+    while editor.process_keypress() {
+        editor.refresh_screen().unwrap();
     }
 }
