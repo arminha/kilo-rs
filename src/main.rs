@@ -35,9 +35,7 @@ struct RawMode {
     orig_term: Termios
 }
 
-struct Row {
-    chars: String,
-}
+struct Row(String);
 
 struct Editor {
     _mode: RawMode,
@@ -45,8 +43,7 @@ struct Editor {
     cy: u16,
     screenrows: u16,
     screencols: u16,
-    numrows: u32,
-    row: Option<Row>,
+    rows: Option<Vec<Row>>,
     stdin: Stdin,
     stdout: Stdout,
 }
@@ -162,8 +159,7 @@ impl Editor {
             cy: 0,
             screenrows: rows,
             screencols: cols,
-            numrows: 0,
-            row: None,
+            rows: None,
             stdin: stdin,
             stdout: stdout
         })
@@ -178,9 +174,10 @@ impl Editor {
     }
 
     fn draw_rows(&mut self) -> io::Result<()> {
+        let numrows = self.rows.as_ref().map_or(0, |v| v.len());
         for y in 0..(self.screenrows) {
-            if y as u32 >= self.numrows {
-                if self.numrows == 0 && y == self.screenrows / 3 {
+            if y as usize >= numrows {
+                if self.rows.is_none() && y == self.screenrows / 3 {
                     let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
                     msg.truncate(self.screencols as usize);
                     let padding = (self.screencols - msg.len() as u16) / 2;
@@ -195,8 +192,8 @@ impl Editor {
                     self.write(b"~")?;
                 }
             } else {
-                let ref row = self.row.as_ref().unwrap().chars;
-                self.stdout.write(truncate_bytes(row, self.screencols))?;
+                let rows = self.rows.as_ref().unwrap();
+                self.stdout.write(truncate_bytes(&rows[y as usize].0, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -275,11 +272,11 @@ impl Editor {
 
     fn open(&mut self, filename: &str) -> io::Result<()> {
         let f = File::open(filename)?;
-        let mut file = BufReader::new(&f);
-        if let Some(line) = file.lines().next() {
-            self.numrows = 1;
-            self.row = Some(Row { chars: line? });
-        }
+        let file = BufReader::new(&f);
+        let results: io::Result<Vec<Row>> = file.lines()
+                        .map(|r| r.map(|l| Row(l)))
+                        .collect();
+        self.rows = Some(results?);
         Ok(())
     }
 }
