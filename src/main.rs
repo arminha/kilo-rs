@@ -7,7 +7,9 @@ use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
-use std::io::{self, Stdin, Stdout, Read, Error, ErrorKind, Write};
+use std::env;
+use std::fs::File;
+use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, Write};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -33,12 +35,18 @@ struct RawMode {
     orig_term: Termios
 }
 
+struct Row {
+    chars: String,
+}
+
 struct Editor {
     _mode: RawMode,
     cx: u16,
     cy: u16,
     screenrows: u16,
     screencols: u16,
+    numrows: u32,
+    row: Option<Row>,
     stdin: Stdin,
     stdout: Stdout,
 }
@@ -70,6 +78,14 @@ fn read_non_blocking<R : Read>(r : &mut R, buf: &mut [u8]) -> usize {
     r.read(buf)
      .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
      .expect("read_non_blocking")
+}
+
+fn truncate_bytes(s: &str, max_len: u16) -> &[u8] {
+    if s.len() > max_len as usize {
+        s[..(max_len as usize)].as_bytes()
+    } else {
+        s.as_bytes()
+    }
 }
 
 fn editor_read_key(stdin: &mut Stdin) -> Key {
@@ -146,6 +162,8 @@ impl Editor {
             cy: 0,
             screenrows: rows,
             screencols: cols,
+            numrows: 0,
+            row: None,
             stdin: stdin,
             stdout: stdout
         })
@@ -161,19 +179,24 @@ impl Editor {
 
     fn draw_rows(&mut self) -> io::Result<()> {
         for y in 0..(self.screenrows) {
-            if y == self.screenrows / 3 {
-                let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
-                msg.truncate(self.screencols as usize);
-                let padding = (self.screencols - msg.len() as u16) / 2;
-                if padding > 0 {
-                    self.write(b"~")?;
-                    for _ in 1..padding {
-                        self.write(b" ")?;
+            if y as u32 >= self.numrows {
+                if self.numrows == 0 && y == self.screenrows / 3 {
+                    let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
+                    msg.truncate(self.screencols as usize);
+                    let padding = (self.screencols - msg.len() as u16) / 2;
+                    if padding > 0 {
+                        self.write(b"~")?;
+                        for _ in 1..padding {
+                            self.write(b" ")?;
+                        }
                     }
+                    self.write(msg.as_bytes())?;
+                } else {
+                    self.write(b"~")?;
                 }
-                self.write(msg.as_bytes())?;
             } else {
-                self.write(b"~")?;
+                let ref row = self.row.as_ref().unwrap().chars;
+                self.stdout.write(truncate_bytes(row, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -249,6 +272,16 @@ impl Editor {
         };
         true
     }
+
+    fn open(&mut self, filename: &str) -> io::Result<()> {
+        let f = File::open(filename)?;
+        let mut file = BufReader::new(&f);
+        if let Some(line) = file.lines().next() {
+            self.numrows = 1;
+            self.row = Some(Row { chars: line? });
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Editor {
@@ -262,6 +295,9 @@ impl Drop for Editor {
 
 fn main() {
     let mut editor = Editor::new().unwrap();
+    if let Some(filename) = env::args().nth(1) {
+        editor.open(&filename).unwrap();
+    }
 
     editor.refresh_screen().unwrap();
     while editor.process_keypress() {
