@@ -39,10 +39,11 @@ struct Row(String);
 
 struct Editor {
     _mode: RawMode,
-    cx: u16,
-    cy: u16,
-    screenrows: u16,
-    screencols: u16,
+    cx: usize,
+    cy: usize,
+    rowoff: usize,
+    screenrows: usize,
+    screencols: usize,
     rows: Option<Vec<Row>>,
     stdin: Stdin,
     stdout: Stdout,
@@ -77,9 +78,9 @@ fn read_non_blocking<R : Read>(r : &mut R, buf: &mut [u8]) -> usize {
      .expect("read_non_blocking")
 }
 
-fn truncate_bytes(s: &str, max_len: u16) -> &[u8] {
-    if s.len() > max_len as usize {
-        s[..(max_len as usize)].as_bytes()
+fn truncate_bytes(s: &str, max_len: usize) -> &[u8] {
+    if s.len() > max_len {
+        s[..max_len].as_bytes()
     } else {
         s.as_bytes()
     }
@@ -157,8 +158,9 @@ impl Editor {
             _mode: mode,
             cx: 0,
             cy: 0,
-            screenrows: rows,
-            screencols: cols,
+            rowoff: 0,
+            screenrows: rows as usize,
+            screencols: cols as usize,
             rows: None,
             stdin: stdin,
             stdout: stdout
@@ -173,14 +175,28 @@ impl Editor {
         self.stdout.flush()
     }
 
+    fn scroll(&mut self) {
+        if self.cy < self.rowoff {
+            self.rowoff = self.cy;
+        }
+        if self.cy >= self.rowoff + self.screenrows {
+            self.rowoff = self.cy - self.screenrows + 1;
+        }
+    }
+
+    fn numrows(&self) -> usize {
+        self.rows.as_ref().map_or(0, |v| v.len())
+    }
+
     fn draw_rows(&mut self) -> io::Result<()> {
-        let numrows = self.rows.as_ref().map_or(0, |v| v.len());
+        let numrows = self.numrows();
         for y in 0..(self.screenrows) {
-            if y as usize >= numrows {
+            let filerow = y + self.rowoff;
+            if filerow >= numrows {
                 if self.rows.is_none() && y == self.screenrows / 3 {
                     let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
-                    msg.truncate(self.screencols as usize);
-                    let padding = (self.screencols - msg.len() as u16) / 2;
+                    msg.truncate(self.screencols);
+                    let padding = (self.screencols - msg.len()) / 2;
                     if padding > 0 {
                         self.write(b"~")?;
                         for _ in 1..padding {
@@ -193,7 +209,7 @@ impl Editor {
                 }
             } else {
                 let rows = self.rows.as_ref().unwrap();
-                self.stdout.write(truncate_bytes(&rows[y as usize].0, self.screencols))?;
+                self.stdout.write(truncate_bytes(&rows[filerow].0, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -205,12 +221,14 @@ impl Editor {
     }
 
     fn refresh_screen(&mut self) -> io::Result<()> {
+        self.scroll();
+
         self.write(b"\x1b[?25l")?;
         self.write(b"\x1b[H")?;
 
         self.draw_rows()?;
 
-        let move_cursor = format!("\x1b[{};{}H", self.cy + 1, self.cx + 1).into_bytes();
+        let move_cursor = format!("\x1b[{};{}H", (self.cy - self.rowoff) + 1, self.cx + 1).into_bytes();
         self.write(&move_cursor)?;
 
         self.write(b"\x1b[?25h")?;
@@ -225,7 +243,7 @@ impl Editor {
                 }
             },
             Key::ArrowDown => {
-                if self.cy < self.screenrows - 1 {
+                if self.cy < self.numrows() {
                     self.cy += 1;
                 }
             },
