@@ -1,1 +1,6 @@
-target
+# cargo
+target/
+
+# IntelliJ
+.idea/
+*.iml
