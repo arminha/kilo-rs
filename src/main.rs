@@ -248,6 +248,11 @@ impl Editor {
         self.flush()
     }
 
+    fn rowlen(&self, index: usize) -> usize {
+        let row = self.rows.as_ref().and_then(|r| r.get(index));
+        row.map_or(0, |r| r.0.len())
+    }
+
     fn move_cursor(&mut self, k: Key) {
         match k {
             Key::ArrowUp => {
@@ -263,12 +268,27 @@ impl Editor {
             Key::ArrowLeft => {
                 if self.cx > 0 {
                     self.cx -= 1;
+                } else if self.cy > 0 {
+                    self.cy -= 1;
+                    self.cx = self.rowlen(self.cy);
                 }
             },
             Key::ArrowRight => {
-                self.cx += 1;
+                let row = self.rows.as_ref().and_then(|r| r.get(self.cy));
+                let rowlen = row.map_or(0, |r| r.0.len());
+                if self.cx < rowlen {
+                    self.cx += 1;
+                } else if row.is_some() && self.cx == rowlen {
+                    self.cx = 0;
+                    self.cy += 1;
+                }
             },
             _ => (),
+        }
+
+        let rowlen = self.rowlen(self.cy);
+        if self.cx > rowlen {
+            self.cx = rowlen;
         }
     }
 
