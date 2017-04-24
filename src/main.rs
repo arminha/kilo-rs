@@ -42,6 +42,7 @@ struct Editor {
     cx: usize,
     cy: usize,
     rowoff: usize,
+    coloff: usize,
     screenrows: usize,
     screencols: usize,
     rows: Option<Vec<Row>>,
@@ -78,11 +79,13 @@ fn read_non_blocking<R : Read>(r : &mut R, buf: &mut [u8]) -> usize {
      .expect("read_non_blocking")
 }
 
-fn truncate_bytes(s: &str, max_len: usize) -> &[u8] {
-    if s.len() > max_len {
-        s[..max_len].as_bytes()
+fn byte_slice(s: &str, offset: usize, max_len: usize) -> &[u8] {
+    if s.len() > max_len + offset {
+        s[offset..(max_len + offset)].as_bytes()
+    } else if s.len() > offset {
+        s[offset..].as_bytes()
     } else {
-        s.as_bytes()
+        s[0..0].as_bytes()
     }
 }
 
@@ -159,6 +162,7 @@ impl Editor {
             cx: 0,
             cy: 0,
             rowoff: 0,
+            coloff: 0,
             screenrows: rows as usize,
             screencols: cols as usize,
             rows: None,
@@ -181,6 +185,12 @@ impl Editor {
         }
         if self.cy >= self.rowoff + self.screenrows {
             self.rowoff = self.cy - self.screenrows + 1;
+        }
+        if self.cx < self.coloff {
+            self.coloff = self.cx;
+        }
+        if self.cx >= self.coloff + self.screencols {
+            self.coloff = (1 + self.cx) - self.screencols;
         }
     }
 
@@ -209,7 +219,7 @@ impl Editor {
                 }
             } else {
                 let rows = self.rows.as_ref().unwrap();
-                self.stdout.write(truncate_bytes(&rows[filerow].0, self.screencols))?;
+                self.stdout.write(byte_slice(&rows[filerow].0, self.coloff, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -228,7 +238,10 @@ impl Editor {
 
         self.draw_rows()?;
 
-        let move_cursor = format!("\x1b[{};{}H", (self.cy - self.rowoff) + 1, self.cx + 1).into_bytes();
+        let move_cursor = format!("\x1b[{};{}H",
+                                  (self.cy - self.rowoff) + 1,
+                                  (self.cx - self.coloff) + 1)
+                                 .into_bytes();
         self.write(&move_cursor)?;
 
         self.write(b"\x1b[?25h")?;
@@ -253,9 +266,7 @@ impl Editor {
                 }
             },
             Key::ArrowRight => {
-                if self.cx < self.screencols - 1 {
-                    self.cx += 1;
-                }
+                self.cx += 1;
             },
             _ => (),
         }
