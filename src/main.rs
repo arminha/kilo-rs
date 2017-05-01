@@ -32,7 +32,7 @@ macro_rules! ctrl_key {
 }
 
 struct RawMode {
-    orig_term: Termios
+    orig_term: Termios,
 }
 
 struct Row(String);
@@ -73,10 +73,14 @@ impl Drop for RawMode {
     }
 }
 
-fn read_non_blocking<R : Read>(r : &mut R, buf: &mut [u8]) -> usize {
+fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
     r.read(buf)
-     .or_else(|e| if e.kind() == ErrorKind::WouldBlock { Ok(0) } else { Err(e) })
-     .expect("read_non_blocking")
+        .or_else(|e| if e.kind() == ErrorKind::WouldBlock {
+                     Ok(0)
+                 } else {
+                     Err(e)
+                 })
+        .expect("read_non_blocking")
 }
 
 fn byte_slice(s: &str, offset: usize, max_len: usize) -> &[u8] {
@@ -104,34 +108,34 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                         if n == 1 {
                             if last[0] == b'~' {
                                 return match seq[1] {
-                                    b'1' => Key::HomeKey,
-                                    b'3' => Key::DeleteKey,
-                                    b'4' => Key::EndKey,
-                                    b'5' => Key::PageUp,
-                                    b'6' => Key::PageDown,
-                                    b'7' => Key::HomeKey,
-                                    b'8' => Key::EndKey,
-                                    _ => Key::Character(b'\x1b'),
-                                }
+                                           b'1' => Key::HomeKey,
+                                           b'3' => Key::DeleteKey,
+                                           b'4' => Key::EndKey,
+                                           b'5' => Key::PageUp,
+                                           b'6' => Key::PageDown,
+                                           b'7' => Key::HomeKey,
+                                           b'8' => Key::EndKey,
+                                           _ => Key::Character(b'\x1b'),
+                                       };
                             }
                         }
                     } else {
                         return match seq[1] {
-                            b'A' => Key::ArrowUp,
-                            b'B' => Key::ArrowDown,
-                            b'C' => Key::ArrowRight,
-                            b'D' => Key::ArrowLeft,
-                            b'H' => Key::HomeKey,
-                            b'F' => Key::EndKey,
-                            _ => Key::Character(b'\x1b'),
-                        }
+                                   b'A' => Key::ArrowUp,
+                                   b'B' => Key::ArrowDown,
+                                   b'C' => Key::ArrowRight,
+                                   b'D' => Key::ArrowLeft,
+                                   b'H' => Key::HomeKey,
+                                   b'F' => Key::EndKey,
+                                   _ => Key::Character(b'\x1b'),
+                               };
                     }
                 } else if n == 2 && seq[0] == b'O' {
                     return match seq[1] {
-                        b'H' => Key::HomeKey,
-                        b'F' => Key::EndKey,
-                        _ => Key::Character(b'\x1b'),
-                    }
+                               b'H' => Key::HomeKey,
+                               b'F' => Key::EndKey,
+                               _ => Key::Character(b'\x1b'),
+                           };
                 }
                 return Key::Character(b'\x1b');
             } else {
@@ -142,10 +146,15 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
 }
 
 fn get_window_size() -> io::Result<(u16, u16)> {
-    let ws = winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0 };
+    let ws = winsize {
+        ws_col: 0,
+        ws_row: 0,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
     unsafe {
         if libc::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0 {
-            return Err(Error::new(ErrorKind::Other, "get_window_size: ioctl failed"))
+            return Err(Error::new(ErrorKind::Other, "get_window_size: ioctl failed"));
         }
     }
     Ok((ws.ws_row, ws.ws_col))
@@ -158,17 +167,17 @@ impl Editor {
         let stdin = io::stdin();
         let stdout = io::stdout();
         Ok(Editor {
-            _mode: mode,
-            cx: 0,
-            cy: 0,
-            rowoff: 0,
-            coloff: 0,
-            screenrows: rows as usize,
-            screencols: cols as usize,
-            rows: None,
-            stdin: stdin,
-            stdout: stdout
-        })
+               _mode: mode,
+               cx: 0,
+               cy: 0,
+               rowoff: 0,
+               coloff: 0,
+               screenrows: rows as usize,
+               screencols: cols as usize,
+               rows: None,
+               stdin: stdin,
+               stdout: stdout,
+           })
     }
 
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -219,7 +228,8 @@ impl Editor {
                 }
             } else {
                 let rows = self.rows.as_ref().unwrap();
-                self.stdout.write(byte_slice(&rows[filerow].0, self.coloff, self.screencols))?;
+                self.stdout
+                    .write(byte_slice(&rows[filerow].0, self.coloff, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -241,7 +251,7 @@ impl Editor {
         let move_cursor = format!("\x1b[{};{}H",
                                   (self.cy - self.rowoff) + 1,
                                   (self.cx - self.coloff) + 1)
-                                 .into_bytes();
+                .into_bytes();
         self.write(&move_cursor)?;
 
         self.write(b"\x1b[?25h")?;
@@ -259,12 +269,12 @@ impl Editor {
                 if self.cy > 0 {
                     self.cy -= 1;
                 }
-            },
+            }
             Key::ArrowDown => {
                 if self.cy < self.numrows() {
                     self.cy += 1;
                 }
-            },
+            }
             Key::ArrowLeft => {
                 if self.cx > 0 {
                     self.cx -= 1;
@@ -272,7 +282,7 @@ impl Editor {
                     self.cy -= 1;
                     self.cx = self.rowlen(self.cy);
                 }
-            },
+            }
             Key::ArrowRight => {
                 let row = self.rows.as_ref().and_then(|r| r.get(self.cy));
                 let rowlen = row.map_or(0, |r| r.0.len());
@@ -282,7 +292,7 @@ impl Editor {
                     self.cx = 0;
                     self.cy += 1;
                 }
-            },
+            }
             _ => (),
         }
 
@@ -296,25 +306,27 @@ impl Editor {
         let c = editor_read_key(&mut self.stdin);
 
         match c {
-            Key::Character(k) if k == ctrl_key!(b'q') => {
-                return false
-            },
+            Key::Character(k) if k == ctrl_key!(b'q') => return false,
             Key::HomeKey => {
                 self.cx = 0;
-            },
+            }
             Key::EndKey => {
                 self.cx = self.screencols - 1;
-            },
+            }
             Key::PageUp | Key::PageDown => {
-                let key = if c == Key::PageUp { Key::ArrowUp } else { Key::ArrowDown };
+                let key = if c == Key::PageUp {
+                    Key::ArrowUp
+                } else {
+                    Key::ArrowDown
+                };
                 for _ in 0..(self.screenrows) {
                     self.move_cursor(key);
                 }
-            },
+            }
             Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight => {
                 self.move_cursor(c);
-            },
-            _ => ()
+            }
+            _ => (),
         };
         true
     }
@@ -322,9 +334,7 @@ impl Editor {
     fn open(&mut self, filename: &str) -> io::Result<()> {
         let f = File::open(filename)?;
         let file = BufReader::new(&f);
-        let results: io::Result<Vec<Row>> = file.lines()
-                        .map(|r| r.map(|l| Row(l)))
-                        .collect();
+        let results: io::Result<Vec<Row>> = file.lines().map(|r| r.map(|l| Row(l))).collect();
         self.rows = Some(results?);
         Ok(())
     }
