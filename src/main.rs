@@ -20,9 +20,9 @@ enum Key {
     ArrowRight,
     ArrowUp,
     ArrowDown,
-    DeleteKey,
-    HomeKey,
-    EndKey,
+    Delete,
+    Home,
+    End,
     PageUp,
     PageDown,
 }
@@ -53,7 +53,7 @@ struct Editor {
 impl RawMode {
     fn enable_raw_mode() -> io::Result<RawMode> {
         let mut term = Termios::from_fd(STDIN_FILENO)?;
-        let mode = RawMode { orig_term: term.clone() };
+        let mode = RawMode { orig_term: term };
 
         term.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
         term.c_oflag &= !OPOST;
@@ -105,19 +105,15 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                     if seq[1] >= b'0' && seq[1] <= b'9' {
                         let mut last = [0; 1];
                         let n = read_non_blocking(stdin, &mut last);
-                        if n == 1 {
-                            if last[0] == b'~' {
-                                return match seq[1] {
-                                           b'1' => Key::HomeKey,
-                                           b'3' => Key::DeleteKey,
-                                           b'4' => Key::EndKey,
-                                           b'5' => Key::PageUp,
-                                           b'6' => Key::PageDown,
-                                           b'7' => Key::HomeKey,
-                                           b'8' => Key::EndKey,
-                                           _ => Key::Character(b'\x1b'),
-                                       };
-                            }
+                        if n == 1 && last[0] == b'~' {
+                            return match seq[1] {
+                                       b'1' | b'7' => Key::Home,
+                                       b'3' => Key::Delete,
+                                       b'4' | b'8' => Key::End,
+                                       b'5' => Key::PageUp,
+                                       b'6' => Key::PageDown,
+                                       _ => Key::Character(b'\x1b'),
+                                   };
                         }
                     } else {
                         return match seq[1] {
@@ -125,15 +121,15 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                                    b'B' => Key::ArrowDown,
                                    b'C' => Key::ArrowRight,
                                    b'D' => Key::ArrowLeft,
-                                   b'H' => Key::HomeKey,
-                                   b'F' => Key::EndKey,
+                                   b'H' => Key::Home,
+                                   b'F' => Key::End,
                                    _ => Key::Character(b'\x1b'),
                                };
                     }
                 } else if n == 2 && seq[0] == b'O' {
                     return match seq[1] {
-                               b'H' => Key::HomeKey,
-                               b'F' => Key::EndKey,
+                               b'H' => Key::Home,
+                               b'F' => Key::End,
                                _ => Key::Character(b'\x1b'),
                            };
                 }
@@ -180,8 +176,8 @@ impl Editor {
            })
     }
 
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.stdout.write(buf)
+    fn write(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.stdout.write_all(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -229,7 +225,7 @@ impl Editor {
             } else {
                 let rows = self.rows.as_ref().unwrap();
                 self.stdout
-                    .write(byte_slice(&rows[filerow].0, self.coloff, self.screencols))?;
+                    .write_all(byte_slice(&rows[filerow].0, self.coloff, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -307,10 +303,10 @@ impl Editor {
 
         match c {
             Key::Character(k) if k == ctrl_key!(b'q') => return false,
-            Key::HomeKey => {
+            Key::Home => {
                 self.cx = 0;
             }
-            Key::EndKey => {
+            Key::End => {
                 self.cx = self.screencols - 1;
             }
             Key::PageUp | Key::PageDown => {
@@ -343,8 +339,8 @@ impl Editor {
 impl Drop for Editor {
     fn drop(&mut self) {
         // clear screen
-        self.stdout.write(b"\x1b[2J").unwrap();
-        self.stdout.write(b"\x1b[H").unwrap();
+        self.stdout.write_all(b"\x1b[2J").unwrap();
+        self.stdout.write_all(b"\x1b[H").unwrap();
         self.stdout.flush().unwrap();
     }
 }
