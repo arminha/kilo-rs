@@ -13,6 +13,8 @@ use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, W
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+const TAB_STOP: usize = 8;
+
 #[derive(PartialEq, Clone, Copy)]
 enum Key {
     Character(u8),
@@ -35,7 +37,10 @@ struct RawMode {
     orig_term: Termios,
 }
 
-struct Row(String);
+struct Row {
+    chars: String,
+    render: String,
+}
 
 struct Editor {
     _mode: RawMode,
@@ -70,6 +75,30 @@ impl RawMode {
 impl Drop for RawMode {
     fn drop(&mut self) {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.orig_term).unwrap()
+    }
+}
+
+impl Row {
+    fn new<T>(s: T) -> Row
+        where T: Into<String>
+    {
+        let chars = s.into();
+        let mut idx = 0;
+        let mut render = String::new();
+        for ch in chars.chars() {
+            if ch == '\t' {
+                render.push(' ');
+                idx += 1;
+                while idx % TAB_STOP != 0 {
+                    render.push(' ');
+                    idx += 1;
+                }
+            } else {
+                render.push(ch);
+                idx += 1;
+            }
+        }
+        Row { chars, render }
     }
 }
 
@@ -225,7 +254,7 @@ impl Editor {
             } else {
                 let rows = self.rows.as_ref().unwrap();
                 self.stdout
-                    .write_all(byte_slice(&rows[filerow].0, self.coloff, self.screencols))?;
+                    .write_all(byte_slice(&rows[filerow].render, self.coloff, self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -256,7 +285,7 @@ impl Editor {
 
     fn rowlen(&self, index: usize) -> usize {
         let row = self.rows.as_ref().and_then(|r| r.get(index));
-        row.map_or(0, |r| r.0.len())
+        row.map_or(0, |r| r.chars.len())
     }
 
     fn move_cursor(&mut self, k: Key) {
@@ -281,7 +310,7 @@ impl Editor {
             }
             Key::ArrowRight => {
                 let row = self.rows.as_ref().and_then(|r| r.get(self.cy));
-                let rowlen = row.map_or(0, |r| r.0.len());
+                let rowlen = row.map_or(0, |r| r.chars.len());
                 if self.cx < rowlen {
                     self.cx += 1;
                 } else if row.is_some() && self.cx == rowlen {
@@ -330,7 +359,7 @@ impl Editor {
     fn open(&mut self, filename: &str) -> io::Result<()> {
         let f = File::open(filename)?;
         let file = BufReader::new(&f);
-        let results: io::Result<Vec<Row>> = file.lines().map(|r| r.map(|l| Row(l))).collect();
+        let results: io::Result<Vec<Row>> = file.lines().map(|r| r.map(Row::new)).collect();
         self.rows = Some(results?);
         Ok(())
     }
