@@ -46,6 +46,7 @@ struct Editor {
     _mode: RawMode,
     cx: usize,
     cy: usize,
+    rx: usize,
     rowoff: usize,
     coloff: usize,
     screenrows: usize,
@@ -99,6 +100,17 @@ impl Row {
             }
         }
         Row { chars, render }
+    }
+
+    fn cx_to_rx(&self, cx: usize) -> usize {
+        let mut rx = 0;
+        for ch in self.chars.chars().take(cx) {
+            if ch == '\t' {
+                rx += (TAB_STOP - 1) - (rx % TAB_STOP);
+            }
+            rx += 1;
+        }
+        rx
     }
 }
 
@@ -195,6 +207,7 @@ impl Editor {
                _mode: mode,
                cx: 0,
                cy: 0,
+               rx: 0,
                rowoff: 0,
                coloff: 0,
                screenrows: rows as usize,
@@ -214,17 +227,22 @@ impl Editor {
     }
 
     fn scroll(&mut self) {
+        self.rx = self.cx;
+        if self.cy < self.numrows() {
+            self.rx = self.rows.as_ref().unwrap()[self.cy].cx_to_rx(self.cx);
+        }
+
         if self.cy < self.rowoff {
             self.rowoff = self.cy;
         }
         if self.cy >= self.rowoff + self.screenrows {
             self.rowoff = self.cy - self.screenrows + 1;
         }
-        if self.cx < self.coloff {
-            self.coloff = self.cx;
+        if self.rx < self.coloff {
+            self.coloff = self.rx;
         }
-        if self.cx >= self.coloff + self.screencols {
-            self.coloff = (1 + self.cx) - self.screencols;
+        if self.rx >= self.coloff + self.screencols {
+            self.coloff = (1 + self.rx) - self.screencols;
         }
     }
 
@@ -275,7 +293,7 @@ impl Editor {
 
         let move_cursor = format!("\x1b[{};{}H",
                                   (self.cy - self.rowoff) + 1,
-                                  (self.cx - self.coloff) + 1)
+                                  (self.rx - self.coloff) + 1)
                 .into_bytes();
         self.write(&move_cursor)?;
 
