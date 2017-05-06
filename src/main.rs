@@ -355,7 +355,7 @@ impl Editor {
                 self.cx = 0;
             }
             Key::End => {
-                self.cx = self.screencols - 1;
+                self.cx = self.rowlen(self.cy);
             }
             Key::PageUp | Key::PageDown => {
                 let key = if c == Key::PageUp {
