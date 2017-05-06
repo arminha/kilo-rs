@@ -7,10 +7,12 @@ use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
+use std::borrow::Cow;
 use std::cmp;
 use std::env;
 use std::fs::File;
 use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, Write};
+use std::time::{Duration, Instant};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -56,6 +58,8 @@ struct Editor {
     stdin: Stdin,
     stdout: Stdout,
     filename: Option<String>,
+    statusmsg: String,
+    statusmsg_time: Instant,
 }
 
 impl RawMode {
@@ -212,12 +216,14 @@ impl Editor {
                rx: 0,
                rowoff: 0,
                coloff: 0,
-               screenrows: (rows - 1) as usize,
+               screenrows: (rows - 2) as usize,
                screencols: cols as usize,
                rows: None,
                stdin: stdin,
                stdout: stdout,
                filename: None,
+               statusmsg: String::new(),
+               statusmsg_time: Instant::now(),
            })
     }
 
@@ -308,7 +314,20 @@ impl Editor {
                 len += 1;
             }
         }
-        self.write(b"\x1b[m")
+        self.write(b"\x1b[m")?;
+        self.write(b"\r\n")
+    }
+
+    fn draw_message_bar(&mut self) -> io::Result<()> {
+        self.write(b"\x1b[K")?;
+        if !self.statusmsg.is_empty() && self.statusmsg_time.elapsed() < Duration::from_secs(5) {
+            let mut msg = Cow::from(self.statusmsg.as_str());
+            if msg.len() > self.screencols {
+                msg.to_mut().truncate(self.screencols);
+            }
+            self.stdout.write_all(msg.as_bytes())?;
+        }
+        Ok(())
     }
 
     fn refresh_screen(&mut self) -> io::Result<()> {
@@ -319,6 +338,7 @@ impl Editor {
 
         self.draw_rows()?;
         self.draw_status_bar()?;
+        self.draw_message_bar()?;
 
         let move_cursor = format!("\x1b[{};{}H",
                                   (self.cy - self.rowoff) + 1,
@@ -328,6 +348,11 @@ impl Editor {
 
         self.write(b"\x1b[?25h")?;
         self.flush()
+    }
+
+    fn set_status_message<S: Into<String>>(&mut self, msg: S) {
+        self.statusmsg = msg.into();
+        self.statusmsg_time = Instant::now();
     }
 
     fn rowlen(&self, index: usize) -> usize {
@@ -429,6 +454,8 @@ fn main() {
     if let Some(filename) = env::args().nth(1) {
         editor.open(&filename).unwrap();
     }
+
+    editor.set_status_message("HELP: Ctrl-Q = quit");
 
     editor.refresh_screen().unwrap();
     while editor.process_keypress() {
