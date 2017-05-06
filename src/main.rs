@@ -55,6 +55,7 @@ struct Editor {
     rows: Option<Vec<Row>>,
     stdin: Stdin,
     stdout: Stdout,
+    filename: Option<String>,
 }
 
 impl RawMode {
@@ -211,11 +212,12 @@ impl Editor {
                rx: 0,
                rowoff: 0,
                coloff: 0,
-               screenrows: rows as usize,
+               screenrows: (rows - 1) as usize,
                screencols: cols as usize,
                rows: None,
                stdin: stdin,
                stdout: stdout,
+               filename: None,
            })
     }
 
@@ -277,11 +279,36 @@ impl Editor {
             }
 
             self.write(b"\x1b[K")?;
-            if y < self.screenrows - 1 {
-                self.write(b"\r\n")?;
-            }
+            self.write(b"\r\n")?;
         }
         Ok(())
+    }
+
+    fn draw_status_bar(&mut self) -> io::Result<()> {
+        self.write(b"\x1b[7m")?;
+        let status;
+        {
+            let name = self.filename
+                .as_ref()
+                .map_or("[No name]", |s| s.as_str());
+            let mut content = format!("{:.20} - {} lines", name, self.numrows());
+            content.truncate(self.screencols);
+            status = content;
+        }
+        let rstatus = format!("{}/{}", self.cy + 1, self.numrows());
+
+        self.write(status.as_bytes())?;
+        let mut len = status.len();
+        while len < self.screencols {
+            if self.screencols - len == rstatus.len() {
+                self.write(rstatus.as_bytes())?;
+                break;
+            } else {
+                self.write(b" ")?;
+                len += 1;
+            }
+        }
+        self.write(b"\x1b[m")
     }
 
     fn refresh_screen(&mut self) -> io::Result<()> {
@@ -291,6 +318,7 @@ impl Editor {
         self.write(b"\x1b[H")?;
 
         self.draw_rows()?;
+        self.draw_status_bar()?;
 
         let move_cursor = format!("\x1b[{};{}H",
                                   (self.cy - self.rowoff) + 1,
@@ -378,6 +406,7 @@ impl Editor {
     }
 
     fn open(&mut self, filename: &str) -> io::Result<()> {
+        self.filename = Some(filename.to_owned());
         let f = File::open(filename)?;
         let file = BufReader::new(&f);
         let results: io::Result<Vec<Row>> = file.lines().map(|r| r.map(Row::new)).collect();
