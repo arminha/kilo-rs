@@ -7,6 +7,7 @@ use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
 use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
+use std::cmp;
 use std::env;
 use std::fs::File;
 use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, Write};
@@ -358,8 +359,10 @@ impl Editor {
             }
             Key::PageUp | Key::PageDown => {
                 let key = if c == Key::PageUp {
+                    self.cy = self.rowoff;
                     Key::ArrowUp
                 } else {
+                    self.cy = cmp::min(self.rowoff + self.screenrows - 1, self.numrows());
                     Key::ArrowDown
                 };
                 for _ in 0..(self.screenrows) {
