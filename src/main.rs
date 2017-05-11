@@ -54,7 +54,7 @@ struct Editor {
     coloff: usize,
     screenrows: usize,
     screencols: usize,
-    rows: Option<Vec<Row>>,
+    rows: Vec<Row>,
     stdin: Stdin,
     stdout: Stdout,
     filename: Option<String>,
@@ -90,6 +90,11 @@ impl Row {
         where T: Into<String>
     {
         let chars = s.into();
+        let render = Row::render_row(&chars);
+        Row { chars, render }
+    }
+
+    fn render_row(chars: &str) -> String {
         let mut idx = 0;
         let mut render = String::new();
         for ch in chars.chars() {
@@ -105,7 +110,7 @@ impl Row {
                 idx += 1;
             }
         }
-        Row { chars, render }
+        render
     }
 
     fn cx_to_rx(&self, cx: usize) -> usize {
@@ -117,6 +122,16 @@ impl Row {
             rx += 1;
         }
         rx
+    }
+
+    fn insert_char(&mut self, at: usize, c: char) {
+        let idx = if at > self.chars.len() {
+            self.chars.len()
+        } else {
+            at
+        };
+        self.chars.insert(idx, c);
+        self.render = Row::render_row(&self.chars);
     }
 }
 
@@ -218,7 +233,7 @@ impl Editor {
                coloff: 0,
                screenrows: (rows - 2) as usize,
                screencols: cols as usize,
-               rows: None,
+               rows: Vec::new(),
                stdin: stdin,
                stdout: stdout,
                filename: None,
@@ -238,7 +253,7 @@ impl Editor {
     fn scroll(&mut self) {
         self.rx = self.cx;
         if self.cy < self.numrows() {
-            self.rx = self.rows.as_ref().unwrap()[self.cy].cx_to_rx(self.cx);
+            self.rx = self.rows[self.cy].cx_to_rx(self.cx);
         }
 
         if self.cy < self.rowoff {
@@ -256,7 +271,7 @@ impl Editor {
     }
 
     fn numrows(&self) -> usize {
-        self.rows.as_ref().map_or(0, |v| v.len())
+        self.rows.len()
     }
 
     fn draw_rows(&mut self) -> io::Result<()> {
@@ -264,7 +279,7 @@ impl Editor {
         for y in 0..(self.screenrows) {
             let filerow = y + self.rowoff;
             if filerow >= numrows {
-                if self.rows.is_none() && y == self.screenrows / 3 {
+                if self.filename.is_none() && self.rows.is_empty() && y == self.screenrows / 3 {
                     let mut msg = format!("Kilo-rs editor -- version {}", VERSION);
                     msg.truncate(self.screencols);
                     let padding = (self.screencols - msg.len()) / 2;
@@ -279,9 +294,10 @@ impl Editor {
                     self.write(b"~")?;
                 }
             } else {
-                let rows = self.rows.as_ref().unwrap();
                 self.stdout
-                    .write_all(byte_slice(&rows[filerow].render, self.coloff, self.screencols))?;
+                    .write_all(byte_slice(&self.rows[filerow].render,
+                                          self.coloff,
+                                          self.screencols))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -356,7 +372,7 @@ impl Editor {
     }
 
     fn rowlen(&self, index: usize) -> usize {
-        let row = self.rows.as_ref().and_then(|r| r.get(index));
+        let row = self.rows.get(index);
         row.map_or(0, |r| r.chars.len())
     }
 
@@ -381,7 +397,7 @@ impl Editor {
                 }
             }
             Key::ArrowRight => {
-                let row = self.rows.as_ref().and_then(|r| r.get(self.cy));
+                let row = self.rows.get(self.cy);
                 let rowlen = row.map_or(0, |r| r.chars.len());
                 if self.cx < rowlen {
                     self.cx += 1;
@@ -397,6 +413,14 @@ impl Editor {
         if self.cx > rowlen {
             self.cx = rowlen;
         }
+    }
+
+    fn insert_char(&mut self, c: char) {
+        if self.cy == self.rows.len() {
+            self.rows.push(Row::new(""));
+        }
+        self.rows[self.cy].insert_char(self.cx, c);
+        self.cx += 1;
     }
 
     fn process_keypress(&mut self) -> bool {
@@ -425,6 +449,7 @@ impl Editor {
             Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight => {
                 self.move_cursor(c);
             }
+            Key::Character(k) if k >= 32 && k < 127 => self.insert_char(k as char),
             _ => (),
         };
         true
@@ -435,7 +460,7 @@ impl Editor {
         let f = File::open(filename)?;
         let file = BufReader::new(&f);
         let results: io::Result<Vec<Row>> = file.lines().map(|r| r.map(Row::new)).collect();
-        self.rows = Some(results?);
+        self.rows = results?;
         Ok(())
     }
 }
