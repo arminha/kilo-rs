@@ -10,7 +10,7 @@ use termios::{ECHO, ICANON, IEXTEN, ISIG};
 use std::borrow::Cow;
 use std::cmp;
 use std::env;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, Write};
 use std::time::{Duration, Instant};
 
@@ -428,6 +428,7 @@ impl Editor {
 
         match c {
             Key::Character(k) if k == ctrl_key!(b'q') => return false,
+            Key::Character(k) if k == ctrl_key!(b's') => self.save(),
             Key::Home => {
                 self.cx = 0;
             }
@@ -463,6 +464,34 @@ impl Editor {
         self.rows = results?;
         Ok(())
     }
+
+    fn save_to_file(&mut self) -> io::Result<usize> {
+        let filename = match self.filename {
+            Some(ref f) => f,
+            None => return Ok(0),
+        };
+        let mut data: Vec<u8> = Vec::new();
+        for row in &self.rows {
+            write!(data, "{}\n", &row.chars)?;
+        }
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(filename)?;
+        file.set_len(data.len() as u64)?;
+        file.write_all(&data)?;
+        Ok(data.len())
+    }
+
+    fn save(&mut self) {
+        if self.filename.is_none() {
+            return;
+        }
+        match self.save_to_file() {
+            Ok(size) => self.set_status_message(format!("{} bytes written to disk", size)),
+            Err(e) => self.set_status_message(format!("Can't save! I/O error: {}", e)),
+        }
+    }
 }
 
 impl Drop for Editor {
@@ -480,7 +509,7 @@ fn main() {
         editor.open(&filename).unwrap();
     }
 
-    editor.set_status_message("HELP: Ctrl-Q = quit");
+    editor.set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
 
     editor.refresh_screen().unwrap();
     while editor.process_keypress() {
