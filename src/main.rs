@@ -55,6 +55,7 @@ struct Editor {
     screenrows: usize,
     screencols: usize,
     rows: Vec<Row>,
+    dirty: bool,
     stdin: Stdin,
     stdout: Stdout,
     filename: Option<String>,
@@ -234,6 +235,7 @@ impl Editor {
                screenrows: (rows - 2) as usize,
                screencols: cols as usize,
                rows: Vec::new(),
+               dirty: false,
                stdin: stdin,
                stdout: stdout,
                filename: None,
@@ -313,7 +315,8 @@ impl Editor {
             let name = self.filename
                 .as_ref()
                 .map_or("[No name]", |s| s.as_str());
-            let mut content = format!("{:.20} - {} lines", name, self.numrows());
+            let modified = if self.dirty { " (modified)" } else { "" };
+            let mut content = format!("{:.20} - {} lines{}", name, self.numrows(), modified);
             content.truncate(self.screencols);
             status = content;
         }
@@ -421,6 +424,7 @@ impl Editor {
         }
         self.rows[self.cy].insert_char(self.cx, c);
         self.cx += 1;
+        self.dirty = true;
     }
 
     fn process_keypress(&mut self) -> bool {
@@ -462,6 +466,7 @@ impl Editor {
         let file = BufReader::new(&f);
         let results: io::Result<Vec<Row>> = file.lines().map(|r| r.map(Row::new)).collect();
         self.rows = results?;
+        self.dirty = false;
         Ok(())
     }
 
@@ -480,6 +485,7 @@ impl Editor {
             .open(filename)?;
         file.set_len(data.len() as u64)?;
         file.write_all(&data)?;
+        self.dirty = false;
         Ok(data.len())
     }
 
