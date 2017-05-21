@@ -18,6 +18,8 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 const TAB_STOP: usize = 8;
 
+const KILO_QUIT_TIMES: u8 = 3;
+
 #[derive(PartialEq, Clone, Copy)]
 enum Key {
     Character(u8),
@@ -56,6 +58,7 @@ struct Editor {
     screencols: usize,
     rows: Vec<Row>,
     dirty: bool,
+    quit_times: u8,
     stdin: Stdin,
     stdout: Stdout,
     filename: Option<String>,
@@ -236,6 +239,7 @@ impl Editor {
                screencols: cols as usize,
                rows: Vec::new(),
                dirty: false,
+               quit_times: KILO_QUIT_TIMES,
                stdin: stdin,
                stdout: stdout,
                filename: None,
@@ -431,7 +435,17 @@ impl Editor {
         let c = editor_read_key(&mut self.stdin);
 
         match c {
-            Key::Character(k) if k == ctrl_key!(b'q') => return false,
+            Key::Character(k) if k == ctrl_key!(b'q') => {
+                if self.dirty && self.quit_times > 0 {
+                    let msg = format!("WARNING!!! File has unsaved changes. \
+                        Press Ctrl-Q {} more times to quit.",
+                                      self.quit_times);
+                    self.set_status_message(msg);
+                    self.quit_times -= 1;
+                    return true;
+                }
+                return false;
+            }
             Key::Character(k) if k == ctrl_key!(b's') => self.save(),
             Key::Home => {
                 self.cx = 0;
@@ -457,6 +471,7 @@ impl Editor {
             Key::Character(k) if k >= 32 && k < 127 => self.insert_char(k as char),
             _ => (),
         };
+        self.quit_times = KILO_QUIT_TIMES;
         true
     }
 
