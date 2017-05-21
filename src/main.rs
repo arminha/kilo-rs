@@ -20,6 +20,15 @@ const TAB_STOP: usize = 8;
 
 const KILO_QUIT_TIMES: u8 = 3;
 
+macro_rules! ctrl_key {
+    ($k:expr) => ($k & 0x1f);
+}
+
+const CTRL_Q: u8 = ctrl_key!(b'q');
+const CTRL_H: u8 = ctrl_key!(b'h');
+const CTRL_S: u8 = ctrl_key!(b's');
+const BACKSPACE: u8 = 127;
+
 #[derive(PartialEq, Clone, Copy)]
 enum Key {
     Character(u8),
@@ -32,10 +41,6 @@ enum Key {
     End,
     PageUp,
     PageDown,
-}
-
-macro_rules! ctrl_key {
-    ($k:expr) => ($k & 0x1f);
 }
 
 struct RawMode {
@@ -135,6 +140,14 @@ impl Row {
             at
         };
         self.chars.insert(idx, c);
+        self.render = Row::render_row(&self.chars);
+    }
+
+    fn delete_char(&mut self, at: usize) {
+        if at >= self.chars.len() {
+            return;
+        }
+        self.chars.remove(at);
         self.render = Row::render_row(&self.chars);
     }
 }
@@ -431,11 +444,22 @@ impl Editor {
         self.dirty = true;
     }
 
+    fn delete_char(&mut self) {
+        if self.cy == self.rows.len() {
+            return;
+        }
+        if self.cx > 0 {
+            self.rows[self.cy].delete_char(self.cx - 1);
+            self.cx -= 1;
+            self.dirty = true;
+        }
+    }
+
     fn process_keypress(&mut self) -> bool {
         let c = editor_read_key(&mut self.stdin);
 
         match c {
-            Key::Character(k) if k == ctrl_key!(b'q') => {
+            Key::Character(CTRL_Q) => {
                 if self.dirty && self.quit_times > 0 {
                     let msg = format!("WARNING!!! File has unsaved changes. \
                         Press Ctrl-Q {} more times to quit.",
@@ -446,12 +470,18 @@ impl Editor {
                 }
                 return false;
             }
-            Key::Character(k) if k == ctrl_key!(b's') => self.save(),
+            Key::Character(CTRL_S) => self.save(),
             Key::Home => {
                 self.cx = 0;
             }
             Key::End => {
                 self.cx = self.rowlen(self.cy);
+            }
+            Key::Character(CTRL_H) |
+            Key::Character(BACKSPACE) => self.delete_char(),
+            Key::Delete => {
+                self.move_cursor(Key::ArrowRight);
+                self.delete_char();
             }
             Key::PageUp | Key::PageDown => {
                 let key = if c == Key::PageUp {
