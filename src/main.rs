@@ -155,6 +155,13 @@ impl Row {
         self.chars.push_str(s);
         self.render = Row::render_row(&self.chars);
     }
+
+    fn truncate(&mut self, new_len: usize) -> String {
+        let removed = self.chars[new_len..].to_string();
+        self.chars.truncate(new_len);
+        self.render = Row::render_row(&self.chars);
+        removed
+    }
 }
 
 fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
@@ -449,6 +456,17 @@ impl Editor {
         self.dirty = true;
     }
 
+    fn insert_new_line(&mut self) {
+        if self.cx == 0 {
+            self.rows.insert(self.cy, Row::new(""));
+        } else {
+            let new_line = self.rows[self.cy].truncate(self.cx);
+            self.rows.insert(self.cy + 1, Row::new(new_line));
+        }
+        self.cy += 1;
+        self.cx = 0;
+    }
+
     fn delete_char(&mut self) {
         if self.cy == self.rows.len() {
             return;
@@ -473,6 +491,7 @@ impl Editor {
         let c = editor_read_key(&mut self.stdin);
 
         match c {
+            Key::Character(b'\r') => self.insert_new_line(),
             Key::Character(CTRL_Q) => {
                 if self.dirty && self.quit_times > 0 {
                     let msg = format!("WARNING!!! File has unsaved changes. \
