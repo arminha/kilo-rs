@@ -150,6 +150,11 @@ impl Row {
         self.chars.remove(at);
         self.render = Row::render_row(&self.chars);
     }
+
+    fn append_str(&mut self, s: &str) {
+        self.chars.push_str(s);
+        self.render = Row::render_row(&self.chars);
+    }
 }
 
 fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
@@ -448,9 +453,18 @@ impl Editor {
         if self.cy == self.rows.len() {
             return;
         }
+        if self.cy == 0 && self.cx == 0 {
+            return;
+        }
         if self.cx > 0 {
             self.rows[self.cy].delete_char(self.cx - 1);
             self.cx -= 1;
+            self.dirty = true;
+        } else {
+            self.cx = self.rows[self.cy - 1].chars.len();
+            let r = self.rows.remove(self.cy);
+            self.rows[self.cy - 1].append_str(r.chars.as_str());
+            self.cy -= 1;
             self.dirty = true;
         }
     }
