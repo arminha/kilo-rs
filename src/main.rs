@@ -408,6 +408,37 @@ impl Editor {
         row.map_or(0, |r| r.chars.len())
     }
 
+    fn prompt(&mut self, prompt: &str) -> Option<String> {
+        let mut buf = String::new();
+        loop {
+            self.set_status_message(format!("{}{}", prompt, buf));
+            self.refresh_screen().unwrap();
+
+            let k = editor_read_key(&mut self.stdin);
+            match k {
+                Key::Delete |
+                Key::Character(CTRL_H) |
+                Key::Character(BACKSPACE) => {
+                    buf.pop();
+                }
+                Key::Character(b'\x1b') => {
+                    self.set_status_message("");
+                    return None;
+                }
+                Key::Character(b'\r') => {
+                    if !buf.is_empty() {
+                        self.set_status_message("");
+                        return Some(buf);
+                    }
+                }
+                Key::Character(c) if c >= 32 && c < 127 => {
+                    buf.push(c as char);
+                }
+                _ => (),
+            }
+        }
+    }
+
     fn move_cursor(&mut self, k: Key) {
         match k {
             Key::ArrowUp => {
@@ -569,7 +600,11 @@ impl Editor {
 
     fn save(&mut self) {
         if self.filename.is_none() {
-            return;
+            self.filename = self.prompt("Save as: ");
+            if self.filename.is_none() {
+                self.set_status_message("Save aborted");
+                return;
+            }
         }
         match self.save_to_file() {
             Ok(size) => self.set_status_message(format!("{} bytes written to disk", size)),
