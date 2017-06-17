@@ -96,7 +96,8 @@ impl Drop for RawMode {
 
 impl Row {
     fn new<T>(s: T) -> Row
-        where T: Into<String>
+    where
+        T: Into<String>,
     {
         let chars = s.into();
         let render = Row::render_row(&chars);
@@ -167,10 +168,10 @@ impl Row {
 fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
     r.read(buf)
         .or_else(|e| if e.kind() == ErrorKind::WouldBlock {
-                     Ok(0)
-                 } else {
-                     Err(e)
-                 })
+            Ok(0)
+        } else {
+            Err(e)
+        })
         .expect("read_non_blocking")
 }
 
@@ -198,31 +199,31 @@ fn editor_read_key(stdin: &mut Stdin) -> Key {
                         let n = read_non_blocking(stdin, &mut last);
                         if n == 1 && last[0] == b'~' {
                             return match seq[1] {
-                                       b'1' | b'7' => Key::Home,
-                                       b'3' => Key::Delete,
-                                       b'4' | b'8' => Key::End,
-                                       b'5' => Key::PageUp,
-                                       b'6' => Key::PageDown,
-                                       _ => Key::Character(b'\x1b'),
-                                   };
+                                b'1' | b'7' => Key::Home,
+                                b'3' => Key::Delete,
+                                b'4' | b'8' => Key::End,
+                                b'5' => Key::PageUp,
+                                b'6' => Key::PageDown,
+                                _ => Key::Character(b'\x1b'),
+                            };
                         }
                     } else {
                         return match seq[1] {
-                                   b'A' => Key::ArrowUp,
-                                   b'B' => Key::ArrowDown,
-                                   b'C' => Key::ArrowRight,
-                                   b'D' => Key::ArrowLeft,
-                                   b'H' => Key::Home,
-                                   b'F' => Key::End,
-                                   _ => Key::Character(b'\x1b'),
-                               };
+                            b'A' => Key::ArrowUp,
+                            b'B' => Key::ArrowDown,
+                            b'C' => Key::ArrowRight,
+                            b'D' => Key::ArrowLeft,
+                            b'H' => Key::Home,
+                            b'F' => Key::End,
+                            _ => Key::Character(b'\x1b'),
+                        };
                     }
                 } else if n == 2 && seq[0] == b'O' {
                     return match seq[1] {
-                               b'H' => Key::Home,
-                               b'F' => Key::End,
-                               _ => Key::Character(b'\x1b'),
-                           };
+                        b'H' => Key::Home,
+                        b'F' => Key::End,
+                        _ => Key::Character(b'\x1b'),
+                    };
                 }
                 return Key::Character(b'\x1b');
             } else {
@@ -241,7 +242,10 @@ fn get_window_size() -> io::Result<(u16, u16)> {
     };
     unsafe {
         if libc::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0 {
-            return Err(Error::new(ErrorKind::Other, "get_window_size: ioctl failed"));
+            return Err(Error::new(
+                ErrorKind::Other,
+                "get_window_size: ioctl failed",
+            ));
         }
     }
     Ok((ws.ws_row, ws.ws_col))
@@ -254,23 +258,23 @@ impl Editor {
         let stdin = io::stdin();
         let stdout = io::stdout();
         Ok(Editor {
-               _mode: mode,
-               cx: 0,
-               cy: 0,
-               rx: 0,
-               rowoff: 0,
-               coloff: 0,
-               screenrows: (rows - 2) as usize,
-               screencols: cols as usize,
-               rows: Vec::new(),
-               dirty: false,
-               quit_times: KILO_QUIT_TIMES,
-               stdin: stdin,
-               stdout: stdout,
-               filename: None,
-               statusmsg: String::new(),
-               statusmsg_time: Instant::now(),
-           })
+            _mode: mode,
+            cx: 0,
+            cy: 0,
+            rx: 0,
+            rowoff: 0,
+            coloff: 0,
+            screenrows: (rows - 2) as usize,
+            screencols: cols as usize,
+            rows: Vec::new(),
+            dirty: false,
+            quit_times: KILO_QUIT_TIMES,
+            stdin: stdin,
+            stdout: stdout,
+            filename: None,
+            statusmsg: String::new(),
+            statusmsg_time: Instant::now(),
+        })
     }
 
     fn write(&mut self, buf: &[u8]) -> io::Result<()> {
@@ -325,10 +329,11 @@ impl Editor {
                     self.write(b"~")?;
                 }
             } else {
-                self.stdout
-                    .write_all(byte_slice(&self.rows[filerow].render,
-                                          self.coloff,
-                                          self.screencols))?;
+                self.stdout.write_all(byte_slice(
+                    &self.rows[filerow].render,
+                    self.coloff,
+                    self.screencols,
+                ))?;
             }
 
             self.write(b"\x1b[K")?;
@@ -341,9 +346,7 @@ impl Editor {
         self.write(b"\x1b[7m")?;
         let status;
         {
-            let name = self.filename
-                .as_ref()
-                .map_or("[No name]", |s| s.as_str());
+            let name = self.filename.as_ref().map_or("[No name]", |s| s.as_str());
             let modified = if self.dirty { " (modified)" } else { "" };
             let mut content = format!("{:.20} - {} lines{}", name, self.numrows(), modified);
             content.truncate(self.screencols);
@@ -388,10 +391,11 @@ impl Editor {
         self.draw_status_bar()?;
         self.draw_message_bar()?;
 
-        let move_cursor = format!("\x1b[{};{}H",
-                                  (self.cy - self.rowoff) + 1,
-                                  (self.rx - self.coloff) + 1)
-                .into_bytes();
+        let move_cursor = format!(
+            "\x1b[{};{}H",
+            (self.cy - self.rowoff) + 1,
+            (self.rx - self.coloff) + 1
+        ).into_bytes();
         self.write(&move_cursor)?;
 
         self.write(b"\x1b[?25h")?;
@@ -525,9 +529,11 @@ impl Editor {
             Key::Character(b'\r') => self.insert_new_line(),
             Key::Character(CTRL_Q) => {
                 if self.dirty && self.quit_times > 0 {
-                    let msg = format!("WARNING!!! File has unsaved changes. \
+                    let msg = format!(
+                        "WARNING!!! File has unsaved changes. \
                         Press Ctrl-Q {} more times to quit.",
-                                      self.quit_times);
+                        self.quit_times
+                    );
                     self.set_status_message(msg);
                     self.quit_times -= 1;
                     return true;
@@ -588,10 +594,7 @@ impl Editor {
         for row in &self.rows {
             write!(data, "{}\n", &row.chars)?;
         }
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(filename)?;
+        let mut file = OpenOptions::new().write(true).create(true).open(filename)?;
         file.set_len(data.len() as u64)?;
         file.write_all(&data)?;
         self.dirty = false;
