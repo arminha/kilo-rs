@@ -27,6 +27,7 @@ macro_rules! ctrl_key {
 const CTRL_Q: u8 = ctrl_key!(b'q');
 const CTRL_H: u8 = ctrl_key!(b'h');
 const CTRL_S: u8 = ctrl_key!(b's');
+const CTRL_F: u8 = ctrl_key!(b'f');
 const BACKSPACE: u8 = 127;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -132,6 +133,20 @@ impl Row {
             rx += 1;
         }
         rx
+    }
+
+    fn rx_to_cx(&self, rx: usize) -> usize {
+        let mut cur_rx = 0;
+        for (cx, ch) in self.chars.chars().enumerate() {
+            if ch == '\t' {
+                cur_rx += (TAB_STOP - 1) - (cur_rx % TAB_STOP);
+            }
+            cur_rx += 1;
+            if cur_rx > rx {
+                return cx;
+            }
+        }
+        self.chars.len()
     }
 
     fn insert_char(&mut self, at: usize, c: char) {
@@ -412,10 +427,10 @@ impl Editor {
         row.map_or(0, |r| r.chars.len())
     }
 
-    fn prompt(&mut self, prompt: &str) -> Option<String> {
+    fn prompt<F: Fn(&String) -> String>(&mut self, format_prompt: F) -> Option<String> {
         let mut buf = String::new();
         loop {
-            self.set_status_message(format!("{}{}", prompt, buf));
+            self.set_status_message(format_prompt(&buf));
             self.refresh_screen().unwrap();
 
             let k = editor_read_key(&mut self.stdin);
@@ -547,6 +562,7 @@ impl Editor {
             Key::End => {
                 self.cx = self.rowlen(self.cy);
             }
+            Key::Character(CTRL_F) => self.find(),
             Key::Character(CTRL_H) |
             Key::Character(BACKSPACE) => self.delete_char(),
             Key::Delete => {
@@ -603,7 +619,7 @@ impl Editor {
 
     fn save(&mut self) {
         if self.filename.is_none() {
-            self.filename = self.prompt("Save as: ");
+            self.filename = self.prompt(|v| format!("Save as: {}", v));
             if self.filename.is_none() {
                 self.set_status_message("Save aborted");
                 return;
@@ -612,6 +628,19 @@ impl Editor {
         match self.save_to_file() {
             Ok(size) => self.set_status_message(format!("{} bytes written to disk", size)),
             Err(e) => self.set_status_message(format!("Can't save! I/O error: {}", e)),
+        }
+    }
+
+    fn find(&mut self) {
+        if let Some(query) = self.prompt(|v| format!("Search: {} (ESC to cancel)", v)) {
+            for (i, row) in self.rows.iter().enumerate() {
+                if let Some(idx) = row.render.find(&query) {
+                    self.cy = i;
+                    self.cx = row.rx_to_cx(idx);
+                    self.rowoff = self.rows.len();
+                    break;
+                }
+            }
         }
     }
 }
@@ -631,7 +660,7 @@ fn main() {
         editor.open(&filename).unwrap();
     }
 
-    editor.set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit");
+    editor.set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
     editor.refresh_screen().unwrap();
     while editor.process_keypress() {
