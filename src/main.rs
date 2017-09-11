@@ -427,7 +427,11 @@ impl Editor {
         row.map_or(0, |r| r.chars.len())
     }
 
-    fn prompt<F: Fn(&String) -> String>(&mut self, format_prompt: F) -> Option<String> {
+    fn prompt<F, C>(&mut self, format_prompt: F, callback: C) -> Option<String>
+    where
+        F: Fn(&str) -> String,
+        C: Fn(&mut Editor, &str, char) -> (),
+    {
         let mut buf = String::new();
         loop {
             self.set_status_message(format_prompt(&buf));
@@ -442,16 +446,19 @@ impl Editor {
                 }
                 Key::Character(b'\x1b') => {
                     self.set_status_message("");
+                    callback(self, &buf, '\x1b');
                     return None;
                 }
                 Key::Character(b'\r') => {
                     if !buf.is_empty() {
                         self.set_status_message("");
+                        callback(self, &buf, '\r');
                         return Some(buf);
                     }
                 }
                 Key::Character(c) if c >= 32 && c < 127 => {
                     buf.push(c as char);
+                    callback(self, &buf, c as char);
                 }
                 _ => (),
             }
@@ -619,7 +626,7 @@ impl Editor {
 
     fn save(&mut self) {
         if self.filename.is_none() {
-            self.filename = self.prompt(|v| format!("Save as: {}", v));
+            self.filename = self.prompt(|v| format!("Save as: {}", v), |_, _, _| ());
             if self.filename.is_none() {
                 self.set_status_message("Save aborted");
                 return;
@@ -632,16 +639,22 @@ impl Editor {
     }
 
     fn find(&mut self) {
-        if let Some(query) = self.prompt(|v| format!("Search: {} (ESC to cancel)", v)) {
-            for (i, row) in self.rows.iter().enumerate() {
+        let callback = |editor: &mut Editor, query: &str, key: char| {
+            if key == '\r' || key == '\x1b' {
+                return;
+            }
+
+            for (i, row) in editor.rows.iter().enumerate() {
                 if let Some(idx) = row.render.find(&query) {
-                    self.cy = i;
-                    self.cx = row.rx_to_cx(idx);
-                    self.rowoff = self.rows.len();
+                    editor.cy = i;
+                    editor.cx = row.rx_to_cx(idx);
+                    editor.rowoff = editor.rows.len();
                     break;
                 }
             }
-        }
+        };
+
+        self.prompt(|v| format!("Search: {} (ESC to cancel)", v), callback);
     }
 }
 
