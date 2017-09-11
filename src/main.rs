@@ -639,6 +639,11 @@ impl Editor {
     }
 
     fn find(&mut self) {
+        let saved_cx = self.cx;
+        let saved_cy = self.cy;
+        let saved_coloff = self.coloff;
+        let saved_rowoff = self.rowoff;
+
         let callback = |editor: &mut Editor, query: &str, key: char| {
             if key == '\r' || key == '\x1b' {
                 return;
@@ -654,7 +659,13 @@ impl Editor {
             }
         };
 
-        self.prompt(|v| format!("Search: {} (ESC to cancel)", v), callback);
+        let query = self.prompt(|v| format!("Search: {} (ESC to cancel)", v), callback);
+        if query.is_none() {
+            self.cx = saved_cx;
+            self.cy = saved_cy;
+            self.coloff = saved_coloff;
+            self.rowoff = saved_rowoff;
+        }
     }
 }
 
