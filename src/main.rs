@@ -532,14 +532,15 @@ impl Editor {
             return;
         }
         if self.cx > 0 {
-            self.rows[self.cy].delete_char(self.cx - 1);
             self.cx -= 1;
+            self.rows[self.cy].delete_char(self.cx);
             self.dirty = true;
         } else {
-            self.cx = self.rows[self.cy - 1].chars.len();
-            let r = self.rows.remove(self.cy);
-            self.rows[self.cy - 1].append_str(r.chars.as_str());
+            let right = self.rows.remove(self.cy);
             self.cy -= 1;
+            let left = &mut self.rows[self.cy];
+            self.cx = left.chars.len();
+            left.append_str(right.chars.as_str());
             self.dirty = true;
         }
     }
