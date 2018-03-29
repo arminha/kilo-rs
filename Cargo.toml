@@ -11,5 +11,5 @@ homepage = "https://github.com/arminha/kilo-rs"
 lto = true
 
 [dependencies]
-termios = "0.2"
+termios = "0.3"
 libc = "0.2"
