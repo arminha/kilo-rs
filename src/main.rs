@@ -14,7 +14,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, Write};
 use std::time::{Duration, Instant};
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TAB_STOP: usize = 8;
 
