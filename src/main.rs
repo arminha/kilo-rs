@@ -284,8 +284,8 @@ impl Editor {
             rows: Vec::new(),
             dirty: false,
             quit_times: KILO_QUIT_TIMES,
-            stdin: stdin,
-            stdout: stdout,
+            stdin,
+            stdout,
             filename: None,
             statusmsg: String::new(),
             statusmsg_time: Instant::now(),
@@ -616,7 +616,7 @@ impl Editor {
         };
         let mut data: Vec<u8> = Vec::new();
         for row in &self.rows {
-            write!(data, "{}\n", &row.chars)?;
+            writeln!(data, "{}", &row.chars)?;
         }
         let mut file = OpenOptions::new().write(true).create(true).open(filename)?;
         file.set_len(data.len() as u64)?;
