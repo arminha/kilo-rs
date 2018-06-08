@@ -1,17 +1,17 @@
 extern crate libc;
 extern crate termios;
 
-use libc::{STDIN_FILENO, STDOUT_FILENO, TIOCGWINSZ, winsize};
-use termios::{Termios, tcsetattr, TCSAFLUSH, VMIN, VTIME};
+use libc::{winsize, STDIN_FILENO, STDOUT_FILENO, TIOCGWINSZ};
+use termios::{tcsetattr, Termios, TCSAFLUSH, VMIN, VTIME};
+use termios::{CS8, OPOST};
 use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
-use termios::{OPOST, CS8};
 use termios::{ECHO, ICANON, IEXTEN, ISIG};
 
 use std::borrow::Cow;
 use std::cmp;
 use std::env;
 use std::fs::{File, OpenOptions};
-use std::io::{self, Stdin, Stdout, Read, BufRead, BufReader, Error, ErrorKind, Write};
+use std::io::{self, BufRead, BufReader, Error, ErrorKind, Read, Stdin, Stdout, Write};
 use std::time::{Duration, Instant};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -21,7 +21,9 @@ const TAB_STOP: usize = 8;
 const KILO_QUIT_TIMES: u8 = 3;
 
 macro_rules! ctrl_key {
-    ($k:expr) => ($k & 0x1f);
+    ($k:expr) => {
+        $k & 0x1f
+    };
 }
 
 const CTRL_Q: u8 = ctrl_key!(b'q');
@@ -182,10 +184,12 @@ impl Row {
 
 fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
     r.read(buf)
-        .or_else(|e| if e.kind() == ErrorKind::WouldBlock {
-            Ok(0)
-        } else {
-            Err(e)
+        .or_else(|e| {
+            if e.kind() == ErrorKind::WouldBlock {
+                Ok(0)
+            } else {
+                Err(e)
+            }
         })
         .expect("read_non_blocking")
 }
@@ -439,9 +443,7 @@ impl Editor {
 
             let k = editor_read_key(&mut self.stdin);
             match k {
-                Key::Delete |
-                Key::Character(CTRL_H) |
-                Key::Character(BACKSPACE) => {
+                Key::Delete | Key::Character(CTRL_H) | Key::Character(BACKSPACE) => {
                     buf.pop();
                 }
                 Key::Character(b'\x1b') => {
@@ -554,7 +556,7 @@ impl Editor {
                 if self.dirty && self.quit_times > 0 {
                     let msg = format!(
                         "WARNING!!! File has unsaved changes. \
-                        Press Ctrl-Q {} more times to quit.",
+                         Press Ctrl-Q {} more times to quit.",
                         self.quit_times
                     );
                     self.set_status_message(msg);
@@ -571,8 +573,7 @@ impl Editor {
                 self.cx = self.rowlen(self.cy);
             }
             Key::Character(CTRL_F) => self.find(),
-            Key::Character(CTRL_H) |
-            Key::Character(BACKSPACE) => self.delete_char(),
+            Key::Character(CTRL_H) | Key::Character(BACKSPACE) => self.delete_char(),
             Key::Delete => {
                 self.move_cursor(Key::ArrowRight);
                 self.delete_char();

@@ -14,10 +14,9 @@ sudo: false
 cache: cargo
 
 install:
-  - (rustfmt -V || cargo install rustfmt -f --vers 0.9.0)
-  - PATH=$PATH:/home/travis/.cargo/bin
+  - if [ $TRAVIS_RUST_VERSION = "stable" ]; then rustup component add rustfmt-preview; fi
 
 script:
-  - cargo fmt -- --write-mode=diff
+  - if [ $TRAVIS_RUST_VERSION = "stable" ]; then cargo fmt -- --write-mode=diff; fi
   - cargo build --verbose
   - cargo test --verbose
