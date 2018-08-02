@@ -17,6 +17,6 @@ install:
   - if [ $TRAVIS_RUST_VERSION = "stable" ]; then rustup component add rustfmt-preview; fi
 
 script:
-  - if [ $TRAVIS_RUST_VERSION = "stable" ]; then cargo fmt -- --write-mode=diff; fi
+  - if [ $TRAVIS_RUST_VERSION = "stable" ]; then cargo fmt --all -- --check; fi
   - cargo build --verbose
   - cargo test --verbose
