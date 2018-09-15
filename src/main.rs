@@ -2,10 +2,7 @@ extern crate libc;
 extern crate termios;
 
 use libc::{winsize, STDIN_FILENO, STDOUT_FILENO, TIOCGWINSZ};
-use termios::{tcsetattr, Termios, TCSAFLUSH, VMIN, VTIME};
-use termios::{CS8, OPOST};
-use termios::{BRKINT, ICRNL, INPCK, ISTRIP, IXON};
-use termios::{ECHO, ICANON, IEXTEN, ISIG};
+use termios::{tcsetattr, Termios, TCSAFLUSH};
 
 use std::borrow::Cow;
 use std::cmp;
@@ -76,6 +73,7 @@ struct Editor {
 
 impl RawMode {
     fn enable_raw_mode() -> io::Result<RawMode> {
+        use termios::*;
         let mut term = Termios::from_fd(STDIN_FILENO)?;
         let mode = RawMode { orig_term: term };
 
@@ -190,8 +188,7 @@ fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
             } else {
                 Err(e)
             }
-        })
-        .expect("read_non_blocking")
+        }).expect("read_non_blocking")
 }
 
 fn byte_slice(s: &str, offset: usize, max_len: usize) -> &[u8] {
