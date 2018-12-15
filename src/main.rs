@@ -188,7 +188,8 @@ fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
             } else {
                 Err(e)
             }
-        }).expect("read_non_blocking")
+        })
+        .expect("read_non_blocking")
 }
 
 fn byte_slice(s: &str, offset: usize, max_len: usize) -> &[u8] {
@@ -411,7 +412,8 @@ impl Editor {
             "\x1b[{};{}H",
             (self.cy - self.rowoff) + 1,
             (self.rx - self.coloff) + 1
-        ).into_bytes();
+        )
+        .into_bytes();
         self.write(&move_cursor)?;
 
         self.write(b"\x1b[?25h")?;
