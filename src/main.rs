@@ -91,7 +91,7 @@ impl RawMode {
 
 impl Drop for RawMode {
     fn drop(&mut self) {
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.orig_term).unwrap()
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &self.orig_term).expect("Failed to drop RawMode")
     }
 }
 
@@ -398,7 +398,7 @@ impl Editor {
         Ok(())
     }
 
-    fn refresh_screen(&mut self) -> io::Result<()> {
+    fn try_refresh_screen(&mut self) -> io::Result<()> {
         self.scroll();
 
         self.write(b"\x1b[?25l")?;
@@ -420,6 +420,10 @@ impl Editor {
         self.flush()
     }
 
+    fn refresh_screen(&mut self) {
+        self.try_refresh_screen().expect("Failed to refresh screen");
+    }
+
     fn set_status_message<S: Into<String>>(&mut self, msg: S) {
         self.statusmsg = msg.into();
         self.statusmsg_time = Instant::now();
@@ -438,7 +442,7 @@ impl Editor {
         let mut buf = String::new();
         loop {
             self.set_status_message(format_prompt(&buf));
-            self.refresh_screen().unwrap();
+            self.refresh_screen();
 
             let k = editor_read_key(&mut self.stdin);
             match k {
@@ -672,10 +676,13 @@ impl Editor {
 
 impl Drop for Editor {
     fn drop(&mut self) {
-        // clear screen
-        self.stdout.write_all(b"\x1b[2J").unwrap();
-        self.stdout.write_all(b"\x1b[H").unwrap();
-        self.stdout.flush().unwrap();
+        fn clear_screen(editor: &mut Editor) -> io::Result<()> {
+            editor.stdout.write_all(b"\x1b[2J")?;
+            editor.stdout.write_all(b"\x1b[H")?;
+            editor.stdout.flush()
+        }
+
+        clear_screen(self).expect("Failed to clear screen");
     }
 }
 
@@ -687,9 +694,9 @@ fn main() -> io::Result<()> {
 
     editor.set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
-    editor.refresh_screen()?;
+    editor.refresh_screen();
     while editor.process_keypress() {
-        editor.refresh_screen()?;
+        editor.refresh_screen();
     }
     Ok(())
 }
