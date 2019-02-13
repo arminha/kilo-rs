@@ -679,16 +679,17 @@ impl Drop for Editor {
     }
 }
 
-fn main() {
-    let mut editor = Editor::new().unwrap();
+fn main() -> io::Result<()> {
+    let mut editor = Editor::new()?;
     if let Some(filename) = env::args().nth(1) {
-        editor.open(&filename).unwrap();
+        editor.open(&filename)?;
     }
 
     editor.set_status_message("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
-    editor.refresh_screen().unwrap();
+    editor.refresh_screen()?;
     while editor.process_keypress() {
-        editor.refresh_screen().unwrap();
+        editor.refresh_screen()?;
     }
+    Ok(())
 }
