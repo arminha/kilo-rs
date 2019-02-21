@@ -72,10 +72,10 @@ struct Editor {
 }
 
 impl RawMode {
-    fn enable_raw_mode() -> io::Result<RawMode> {
+    fn enable_raw_mode() -> io::Result<Self> {
         use termios::*;
         let mut term = Termios::from_fd(STDIN_FILENO)?;
-        let mode = RawMode { orig_term: term };
+        let mode = Self { orig_term: term };
 
         term.c_iflag &= !(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
         term.c_oflag &= !OPOST;
@@ -96,13 +96,13 @@ impl Drop for RawMode {
 }
 
 impl Row {
-    fn new<T>(s: T) -> Row
+    fn new<T>(s: T) -> Self
     where
         T: Into<String>,
     {
         let chars = s.into();
-        let render = Row::render_row(&chars);
-        Row { chars, render }
+        let render = Self::render_row(&chars);
+        Self { chars, render }
     }
 
     fn render_row(chars: &str) -> String {
@@ -156,7 +156,7 @@ impl Row {
             at
         };
         self.chars.insert(idx, c);
-        self.render = Row::render_row(&self.chars);
+        self.render = Self::render_row(&self.chars);
     }
 
     fn delete_char(&mut self, at: usize) {
@@ -164,18 +164,18 @@ impl Row {
             return;
         }
         self.chars.remove(at);
-        self.render = Row::render_row(&self.chars);
+        self.render = Self::render_row(&self.chars);
     }
 
     fn append_str(&mut self, s: &str) {
         self.chars.push_str(s);
-        self.render = Row::render_row(&self.chars);
+        self.render = Self::render_row(&self.chars);
     }
 
     fn truncate(&mut self, new_len: usize) -> String {
         let removed = self.chars[new_len..].to_string();
         self.chars.truncate(new_len);
-        self.render = Row::render_row(&self.chars);
+        self.render = Self::render_row(&self.chars);
         removed
     }
 }
@@ -269,12 +269,12 @@ fn get_window_size() -> io::Result<(u16, u16)> {
 }
 
 impl Editor {
-    fn new() -> io::Result<Editor> {
+    fn new() -> io::Result<Self> {
         let mode = RawMode::enable_raw_mode()?;
         let (rows, cols) = get_window_size()?;
         let stdin = io::stdin();
         let stdout = io::stdout();
-        Ok(Editor {
+        Ok(Self {
             _mode: mode,
             cx: 0,
             cy: 0,
@@ -437,7 +437,7 @@ impl Editor {
     fn prompt<F, C>(&mut self, format_prompt: F, mut callback: C) -> Option<String>
     where
         F: Fn(&str) -> String,
-        C: FnMut(&mut Editor, &str, Key) -> (),
+        C: FnMut(&mut Self, &str, Key) -> (),
     {
         let mut buf = String::new();
         loop {
@@ -653,7 +653,7 @@ impl Editor {
         let saved_rowoff = self.rowoff;
         let mut last_match: Option<usize> = None;
 
-        let callback = |editor: &mut Editor, query: &str, key: Key| {
+        let callback = |editor: &mut Self, query: &str, key: Key| {
             let forward = match key {
                 Key::Character(b'\x1b') | Key::Character(b'\r') => {
                     last_match = None;
@@ -713,15 +713,15 @@ impl Editor {
     }
 }
 
+fn clear_screen(stdout: &mut Stdout) -> io::Result<()> {
+    stdout.write_all(b"\x1b[2J")?;
+    stdout.write_all(b"\x1b[H")?;
+    stdout.flush()
+}
+
 impl Drop for Editor {
     fn drop(&mut self) {
-        fn clear_screen(editor: &mut Editor) -> io::Result<()> {
-            editor.stdout.write_all(b"\x1b[2J")?;
-            editor.stdout.write_all(b"\x1b[H")?;
-            editor.stdout.flush()
-        }
-
-        clear_screen(self).expect("Failed to clear screen");
+        clear_screen(&mut self.stdout).expect("Failed to clear screen");
     }
 }
 
