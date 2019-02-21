@@ -202,50 +202,54 @@ fn byte_slice(s: &str, offset: usize, max_len: usize) -> &[u8] {
     }
 }
 
+fn read_escape_sequence(stdin: &mut Stdin) -> Key {
+    let mut seq = [0; 2];
+    let n = read_non_blocking(stdin, &mut seq);
+    if n == 2 && seq[0] == b'[' {
+        if seq[1] >= b'0' && seq[1] <= b'9' {
+            let mut last = [0; 1];
+            if read_non_blocking(stdin, &mut last) == 1 && last[0] == b'~' {
+                match seq[1] {
+                    b'1' | b'7' => Key::Home,
+                    b'3' => Key::Delete,
+                    b'4' | b'8' => Key::End,
+                    b'5' => Key::PageUp,
+                    b'6' => Key::PageDown,
+                    _ => Key::Character(b'\x1b'),
+                }
+            } else {
+                Key::Character(b'\x1b')
+            }
+        } else {
+            match seq[1] {
+                b'A' => Key::ArrowUp,
+                b'B' => Key::ArrowDown,
+                b'C' => Key::ArrowRight,
+                b'D' => Key::ArrowLeft,
+                b'H' => Key::Home,
+                b'F' => Key::End,
+                _ => Key::Character(b'\x1b'),
+            }
+        }
+    } else if n == 2 && seq[0] == b'O' {
+        match seq[1] {
+            b'H' => Key::Home,
+            b'F' => Key::End,
+            _ => Key::Character(b'\x1b'),
+        }
+    } else {
+        Key::Character(b'\x1b')
+    }
+}
+
 fn editor_read_key(stdin: &mut Stdin) -> Key {
     let mut buf = [0; 1];
     loop {
-        let n = read_non_blocking(stdin, &mut buf);
-        if n == 1 {
-            if buf[0] == b'\x1b' {
-                let mut seq = [0; 2];
-                let n = read_non_blocking(stdin, &mut seq);
-                if n == 2 && seq[0] == b'[' {
-                    if seq[1] >= b'0' && seq[1] <= b'9' {
-                        let mut last = [0; 1];
-                        let n = read_non_blocking(stdin, &mut last);
-                        if n == 1 && last[0] == b'~' {
-                            return match seq[1] {
-                                b'1' | b'7' => Key::Home,
-                                b'3' => Key::Delete,
-                                b'4' | b'8' => Key::End,
-                                b'5' => Key::PageUp,
-                                b'6' => Key::PageDown,
-                                _ => Key::Character(b'\x1b'),
-                            };
-                        }
-                    } else {
-                        return match seq[1] {
-                            b'A' => Key::ArrowUp,
-                            b'B' => Key::ArrowDown,
-                            b'C' => Key::ArrowRight,
-                            b'D' => Key::ArrowLeft,
-                            b'H' => Key::Home,
-                            b'F' => Key::End,
-                            _ => Key::Character(b'\x1b'),
-                        };
-                    }
-                } else if n == 2 && seq[0] == b'O' {
-                    return match seq[1] {
-                        b'H' => Key::Home,
-                        b'F' => Key::End,
-                        _ => Key::Character(b'\x1b'),
-                    };
-                }
-                return Key::Character(b'\x1b');
-            } else {
-                return Key::Character(buf[0]);
-            }
+        if read_non_blocking(stdin, &mut buf) == 1 {
+            return match buf[0] {
+                b'\x1b' => read_escape_sequence(stdin),
+                ch => Key::Character(ch),
+            };
         }
     }
 }
