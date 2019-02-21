@@ -434,10 +434,10 @@ impl Editor {
         row.map_or(0, |r| r.chars.len())
     }
 
-    fn prompt<F, C>(&mut self, format_prompt: F, callback: C) -> Option<String>
+    fn prompt<F, C>(&mut self, format_prompt: F, mut callback: C) -> Option<String>
     where
         F: Fn(&str) -> String,
-        C: Fn(&mut Editor, &str, char) -> (),
+        C: FnMut(&mut Editor, &str, Key) -> (),
     {
         let mut buf = String::new();
         loop {
@@ -451,19 +451,22 @@ impl Editor {
                 }
                 Key::Character(b'\x1b') => {
                     self.set_status_message("");
-                    callback(self, &buf, '\x1b');
+                    callback(self, &buf, k);
                     return None;
                 }
                 Key::Character(b'\r') => {
                     if !buf.is_empty() {
                         self.set_status_message("");
-                        callback(self, &buf, '\r');
+                        callback(self, &buf, k);
                         return Some(buf);
                     }
                 }
+                Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown => {
+                    callback(self, &buf, k);
+                }
                 Key::Character(c) if c >= 32 && c < 127 => {
                     buf.push(c as char);
-                    callback(self, &buf, c as char);
+                    callback(self, &buf, k);
                 }
                 _ => (),
             }
@@ -648,23 +651,59 @@ impl Editor {
         let saved_cy = self.cy;
         let saved_coloff = self.coloff;
         let saved_rowoff = self.rowoff;
+        let mut last_match: Option<usize> = None;
 
-        let callback = |editor: &mut Editor, query: &str, key: char| {
-            if key == '\r' || key == '\x1b' {
-                return;
-            }
+        let callback = |editor: &mut Editor, query: &str, key: Key| {
+            let forward = match key {
+                Key::Character(b'\x1b') | Key::Character(b'\r') => {
+                    last_match = None;
+                    return;
+                }
+                Key::ArrowRight | Key::ArrowDown => true,
+                Key::ArrowLeft | Key::ArrowUp => last_match.is_none(),
+                _ => {
+                    last_match = None;
+                    true
+                }
+            };
 
-            for (i, row) in editor.rows.iter().enumerate() {
-                if let Some(idx) = row.render.find(&query) {
-                    editor.cy = i;
-                    editor.cx = row.rx_to_cx(idx);
-                    editor.rowoff = editor.rows.len();
-                    break;
+            // TODO find a way to remove this code duplication
+            if forward {
+                let first_row = last_match.map_or(0, |l| l + 1);
+                let rows = editor.rows.iter().enumerate();
+                let rotate_rows = rows.clone().skip(first_row).chain(rows.take(first_row));
+                for (i, row) in rotate_rows {
+                    if let Some(idx) = row.render.find(&query) {
+                        last_match = Some(i);
+                        editor.cy = i;
+                        editor.cx = row.rx_to_cx(idx);
+                        editor.rowoff = editor.rows.len();
+                        break;
+                    }
+                }
+            } else {
+                let first_row = editor.rows.len() - last_match.unwrap();
+                let reverse_rows = editor.rows.iter().enumerate().rev();
+                let rotate_rows = reverse_rows
+                    .clone()
+                    .skip(first_row)
+                    .chain(reverse_rows.take(first_row));
+                for (i, row) in rotate_rows {
+                    if let Some(idx) = row.render.find(&query) {
+                        last_match = Some(i);
+                        editor.cy = i;
+                        editor.cx = row.rx_to_cx(idx);
+                        editor.rowoff = editor.rows.len();
+                        break;
+                    }
                 }
             }
         };
 
-        let query = self.prompt(|v| format!("Search: {} (ESC to cancel)", v), callback);
+        let query = self.prompt(
+            |v| format!("Search: {} (Use ESC/Arrows/Enter)", v),
+            callback,
+        );
         if query.is_none() {
             self.cx = saved_cx;
             self.cy = saved_cy;
