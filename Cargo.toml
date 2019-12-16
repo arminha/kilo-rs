@@ -8,6 +8,7 @@ repository = "https://github.com/arminha/kilo-rs"
 
 [profile.release]
 lto = true
+opt-level = "z"
 
 [dependencies]
 termios = "0.3"
