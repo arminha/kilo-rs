@@ -441,7 +441,7 @@ impl Editor {
     fn prompt<F, C>(&mut self, format_prompt: F, mut callback: C) -> Option<String>
     where
         F: Fn(&str) -> String,
-        C: FnMut(&mut Self, &str, Key) -> (),
+        C: FnMut(&mut Self, &str, Key),
     {
         let mut buf = String::new();
         loop {
@@ -468,7 +468,7 @@ impl Editor {
                 Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown => {
                     callback(self, &buf, k);
                 }
-                Key::Character(c) if c >= 32 && c < 127 => {
+                Key::Character(c) if (32..127).contains(&c) => {
                     buf.push(c as char);
                     callback(self, &buf, k);
                 }
@@ -603,7 +603,7 @@ impl Editor {
             Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight => {
                 self.move_cursor(c);
             }
-            Key::Character(k) if k >= 32 && k < 127 => self.insert_char(k as char),
+            Key::Character(k) if (32..127).contains(&k) => self.insert_char(k as char),
             _ => (),
         };
         self.quit_times = KILO_QUIT_TIMES;
