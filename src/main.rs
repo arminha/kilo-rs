@@ -1,6 +1,3 @@
-// allow manual_range_contains for backward compatibility with Rust 1.26
-#![allow(clippy::manual_range_contains)]
-
 extern crate libc;
 extern crate termios;
 
@@ -441,6 +438,7 @@ impl Editor {
         row.map_or(0, |r| r.chars.len())
     }
 
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::manual_range_contains))] // backward compatibility with Rust 1.26
     fn prompt<F, C>(&mut self, format_prompt: F, mut callback: C) -> Option<String>
     where
         F: Fn(&str) -> String,
@@ -560,6 +558,7 @@ impl Editor {
         }
     }
 
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::manual_range_contains))] // backward compatibility with Rust 1.26
     fn process_keypress(&mut self) -> bool {
         let c = editor_read_key(&mut self.stdin);
 
