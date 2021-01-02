@@ -92,7 +92,8 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.26.2
+          # no clippy available for 1.26.2
+          # - 1.26.2
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
