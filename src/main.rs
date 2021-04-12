@@ -547,15 +547,14 @@ impl Editor {
         if self.cx > 0 {
             self.cx -= 1;
             self.rows[self.cy].delete_char(self.cx);
-            self.dirty = true;
         } else {
             let right = self.rows.remove(self.cy);
             self.cy -= 1;
             let left = &mut self.rows[self.cy];
             self.cx = left.chars.len();
             left.append_str(right.chars.as_str());
-            self.dirty = true;
         }
+        self.dirty = true;
     }
 
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::manual_range_contains))] // backward compatibility with Rust 1.26
