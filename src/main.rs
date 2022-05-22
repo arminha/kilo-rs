@@ -29,7 +29,7 @@ const CTRL_S: u8 = ctrl_key!(b's');
 const CTRL_F: u8 = ctrl_key!(b'f');
 const BACKSPACE: u8 = 127;
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 enum Key {
     Character(u8),
     ArrowLeft,
