@@ -678,7 +678,7 @@ impl Editor {
                 let rows = editor.rows.iter().enumerate();
                 let rotate_rows = rows.clone().skip(first_row).chain(rows.take(first_row));
                 for (i, row) in rotate_rows {
-                    if let Some(idx) = row.render.find(&query) {
+                    if let Some(idx) = row.render.find(query) {
                         last_match = Some(i);
                         editor.cy = i;
                         editor.cx = row.rx_to_cx(idx);
@@ -694,7 +694,7 @@ impl Editor {
                     .skip(first_row)
                     .chain(reverse_rows.take(first_row));
                 for (i, row) in rotate_rows {
-                    if let Some(idx) = row.render.find(&query) {
+                    if let Some(idx) = row.render.find(query) {
                         last_match = Some(i);
                         editor.cy = i;
                         editor.cx = row.rx_to_cx(idx);
