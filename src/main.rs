@@ -438,7 +438,6 @@ impl Editor {
         row.map_or(0, |r| r.chars.len())
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::manual_range_contains))] // backward compatibility with Rust 1.26
     fn prompt<F, C>(&mut self, format_prompt: F, mut callback: C) -> Option<String>
     where
         F: Fn(&str) -> String,
@@ -469,7 +468,7 @@ impl Editor {
                 Key::ArrowLeft | Key::ArrowRight | Key::ArrowUp | Key::ArrowDown => {
                     callback(self, &buf, k);
                 }
-                Key::Character(c) if c >= 32 && c < 127 => {
+                Key::Character(c) if (32..127).contains(&c) => {
                     buf.push(c as char);
                     callback(self, &buf, k);
                 }
@@ -557,7 +556,6 @@ impl Editor {
         self.dirty = true;
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::manual_range_contains))] // backward compatibility with Rust 1.26
     fn process_keypress(&mut self) -> bool {
         let c = editor_read_key(&mut self.stdin);
 
@@ -604,7 +602,7 @@ impl Editor {
             Key::ArrowUp | Key::ArrowDown | Key::ArrowLeft | Key::ArrowRight => {
                 self.move_cursor(c);
             }
-            Key::Character(k) if k >= 32 && k < 127 => self.insert_char(k as char),
+            Key::Character(k) if (32..127).contains(&k) => self.insert_char(k as char),
             _ => (),
         };
         self.quit_times = KILO_QUIT_TIMES;
