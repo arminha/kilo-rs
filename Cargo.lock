@@ -12,9 +12,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.48"
+version = "0.2.147"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e962c7641008ac010fa60a7dfdc1712449f29c44ef2d4702394aea943ee75047"
+checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 
 [[package]]
 name = "termios"
