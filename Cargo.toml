@@ -5,6 +5,7 @@ authors = ["Armin Häberling <armin.aha@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/arminha/kilo-rs"
+edition = "2018"
 
 [profile.release]
 lto = true

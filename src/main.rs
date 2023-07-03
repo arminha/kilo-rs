@@ -1,6 +1,3 @@
-extern crate libc;
-extern crate termios;
-
 use libc::{winsize, STDIN_FILENO, STDOUT_FILENO, TIOCGWINSZ};
 use termios::{tcsetattr, Termios, TCSAFLUSH};
 
