@@ -625,7 +625,11 @@ impl Editor {
         for row in &self.rows {
             writeln!(data, "{}", &row.chars)?;
         }
-        let mut file = OpenOptions::new().write(true).create(true).open(filename)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(filename)?;
         file.set_len(data.len() as u64)?;
         file.write_all(&data)?;
         self.dirty = false;
