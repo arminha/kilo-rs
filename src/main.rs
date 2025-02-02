@@ -191,11 +191,11 @@ fn read_non_blocking<R: Read>(r: &mut R, buf: &mut [u8]) -> usize {
 
 fn byte_slice(s: &str, offset: usize, max_len: usize) -> &[u8] {
     if s.len() > max_len + offset {
-        s[offset..(max_len + offset)].as_bytes()
+        &s.as_bytes()[offset..(max_len + offset)]
     } else if s.len() > offset {
-        s[offset..].as_bytes()
+        &s.as_bytes()[offset..]
     } else {
-        s[0..0].as_bytes()
+        &s.as_bytes()[0..0]
     }
 }
 
